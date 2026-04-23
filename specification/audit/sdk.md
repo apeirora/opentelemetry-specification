@@ -116,9 +116,7 @@ that reduces the number of `AuditRecord`s reaching the exporter.
 
 ### Shutdown
 
-`Shutdown` MUST be called at most once per `AuditProvider` instance.
-
-Before returning, `Shutdown` MUST:
+On the first call, `Shutdown` MUST:
 
 1. Call `ForceFlush` to ensure all buffered records are exported.
 2. Call `Shutdown` on every registered
@@ -126,10 +124,15 @@ Before returning, `Shutdown` MUST:
 
 `Shutdown` SHOULD complete or abort within a configurable timeout.
 After `Shutdown` returns, subsequent calls to `GetAuditLogger` SHOULD
-return an error or throw an exception.
+return an error or throw an exception. Any call to `emit` on an
+`AuditLogger` obtained from a shut-down `AuditProvider` MUST raise a
+hard error or throw an exception and MUST NOT silently drop the record.
 
 `Shutdown` SHOULD provide a way for the caller to determine whether it
 succeeded, failed, or timed out.
+
+Subsequent calls to `Shutdown` or `ForceFlush` after the first
+`Shutdown` call MUST be no-ops and MUST NOT return an error.
 
 ### ForceFlush
 
@@ -143,9 +146,16 @@ immediately.
 SHOULD provide a way for the caller to determine whether it succeeded,
 failed, or timed out.
 
+If `Shutdown` has already been called, `ForceFlush` MUST be a no-op
+and MUST NOT return an error.
+
 ## AuditLogger
 
 ### Emit an AuditRecord
+
+If `emit` is called after the owning `AuditProvider` has been shut
+down, the SDK MUST raise a hard error or throw an exception. The SDK
+MUST NOT silently drop the record.
 
 When `emit` is called, the SDK MUST:
 
@@ -248,16 +258,20 @@ minimise the latency of synchronous `emit` calls.
 Mutations made by a processor to `auditRecord` MUST be visible to
 subsequently registered processors.
 
+If `OnEmit` is called after the processor has been shut down, the
+processor MUST raise a hard error or throw an exception and MUST NOT
+silently accept or forward the record.
+
 #### Shutdown
 
 Shuts down the processor. Called when the `AuditProvider` is shut down.
 
-`Shutdown` MUST be called at most once per `AuditRecordProcessor`
-instance.
-
-`Shutdown` MUST include the effects of `ForceFlush`.
+On the first call, `Shutdown` MUST include the effects of `ForceFlush`.
 
 `Shutdown` SHOULD complete or abort within a configurable timeout.
+
+Subsequent calls to `Shutdown` or `ForceFlush` after the first
+`Shutdown` call MUST be no-ops and MUST NOT return an error.
 
 #### ForceFlush
 
@@ -266,6 +280,9 @@ possible, preferably before returning.
 
 `ForceFlush` SHOULD provide a way for the caller to determine whether
 it succeeded, failed, or timed out.
+
+If `Shutdown` has already been called, `ForceFlush` MUST be a no-op
+and MUST NOT return an error.
 
 ### Built-in processors
 
@@ -339,9 +356,12 @@ it succeeded, failed, or timed out.
 
 Shuts down the exporter. Called when the `AuditProvider` is shut down.
 
-`Shutdown` MUST be called at most once per `AuditRecordExporter`
-instance. After `Shutdown`, subsequent calls to `Export` MUST return
-`Failure`.
+On the first call, `Shutdown` MUST flush any internally buffered records
+and release all resources. After `Shutdown` completes, subsequent calls
+to `Export` MUST return `Failure`.
+
+Subsequent calls to `Shutdown` or `ForceFlush` after the first
+`Shutdown` call MUST be no-ops and MUST NOT return an error.
 
 ### OTLP transport requirements
 
