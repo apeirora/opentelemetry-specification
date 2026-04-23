@@ -21,6 +21,11 @@ release.
 
 ### Logs
 
+### Audit
+
+- Introduce Audit-Logging signal and related specification sections.
+  ([#1](https://github.com/apeirora/opentelemetry-specification/pull/1))
+
 ### Baggage
 
 ### Profiles
