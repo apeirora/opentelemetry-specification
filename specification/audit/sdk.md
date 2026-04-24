@@ -171,7 +171,7 @@ When `emit` is called, the SDK MUST:
    [`OnEmit`](#onemit).
 5. Block until the exporter returns a successful acknowledgement from
    the audit sink.
-6. Return the [`AuditReceipt`](./data-model.md#auditreceipt) provided
+6. Return the [`AuditReceipt`](./data-model.md#auditreceipt-definition) provided
    by the sink.
 
 If the synchronous `emit` cannot obtain an acknowledgement within the
@@ -416,7 +416,7 @@ failure-handling sequence:
 1. **Buffer**: Retain the record in the SDK's queue (disk-backed or
    in-memory, depending on configuration). The record MUST NOT be
    discarded.
-2. **Retry**: Attempt re-export with exponential back-off and a
+2. **Retry**: Attempt reexport with exponential back-off and a
    configurable maximum number of retries. The initial retry interval,
    back-off multiplier, and maximum interval SHOULD be configurable.
 3. **Hard error**: If the retry budget is exhausted or the buffer is
