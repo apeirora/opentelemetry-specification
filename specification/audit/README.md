@@ -81,7 +81,7 @@ compliance drivers that motivate them:
 | Operator        | Configuration change          | ISO 27001 A.8.15             |
 | Service account | Elevated-privilege action     | ISO 27001 A.5.18             |
 | Service         | Outbound call to external API | PCI-DSS Req. 10              |
-| Runtime         | Antivirus / IDS rule fired    | ISO 27001 A.8.16             |
+| Runtime         | Antivirus / IDs rule fired    | ISO 27001 A.8.16             |
 
 ## Signal Overview
 
@@ -118,10 +118,10 @@ The principal data components are:
 
 - **AuditRecord** – the audit event payload containing mandatory fields
   for actor, action, outcome, timestamps, and optional integrity
-  metadata. See [Audit Record Data Model](./data-model.md#auditrecord).
+  metadata. See [Audit Record Data Model](./data-model.md#auditrecord-definition).
 - **AuditReceipt** – proof-of-delivery returned by the sink, containing
   a unique record identifier and a SHA-256 integrity hash.
-  See [Audit Record Data Model](./data-model.md#auditreceipt).
+  See [Audit Record Data Model](./data-model.md#auditreceipt-definition).
 
 ## Relationship to the Log Signal
 
