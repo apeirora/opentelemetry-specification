@@ -33,6 +33,7 @@ weight: 3
       - [ForceFlush](#forceflush-1)
     - [Built-in processors](#built-in-processors)
       - [Simple processor](#simple-processor)
+      - [Batching processor](#batching-processor)
       - [Signing processor (Sig)](#signing-processor-sig)
   - [AuditRecordExporter](#auditrecordexporter)
     - [AuditRecordExporter operations](#auditrecordexporter-operations)
@@ -42,10 +43,12 @@ weight: 3
     - [OTLP transport requirements](#otlp-transport-requirements)
       - [Dedicated endpoint](#dedicated-endpoint)
       - [No partial success](#no-partial-success)
+      - [Idempotency](#idempotency)
       - [InstrumentationScope](#instrumentationscope)
   - [Failure handling](#failure-handling)
   - [Clock synchronisation](#clock-synchronisation)
   - [Interaction with the Log signal](#interaction-with-the-log-signal)
+  - [Collector pipeline (Tier-2)](#collector-pipeline-tier-2)
   - [Observability](#observability)
   - [Concurrency requirements](#concurrency-requirements)
   - [References](#references)
@@ -159,19 +162,21 @@ MUST NOT silently drop the record.
 
 When `emit` is called, the SDK MUST:
 
-1. Set `ObservedTimestamp` to the current time if the caller did not
+1. If the caller did not provide a `RecordId`, generate a UUID v4 and
+   set it on the record before any further processing.
+2. Set `ObservedTimestamp` to the current time if the caller did not
    provide it.
-2. Validate that all required fields (`Timestamp`, `EventName`,
-   `Actor`, `ActorType`, `Action`, `Outcome`) are present and non-empty.
-   If any required field is missing, `emit` MUST surface a hard error
-   to the caller and MUST NOT silently drop the record.
-3. Enqueue the `AuditRecord` in the [AuditRecord Queue](#auditrecord-queue).
-4. Pass the record through all registered
+3. Validate that all required fields (`RecordId`, `Timestamp`,
+   `EventName`, `Actor`, `ActorType`, `Action`, `Outcome`) are present
+   and non-empty. If any required field is missing, `emit` MUST surface
+   a hard error to the caller and MUST NOT silently drop the record.
+4. Enqueue the `AuditRecord` in the [AuditRecord Queue](#auditrecord-queue).
+5. Pass the record through all registered
    `AuditRecordProcessor` instances via
    [`OnEmit`](#onemit).
-5. Block until the exporter returns a successful acknowledgement from
+6. Block until the exporter returns a successful acknowledgement from
    the audit sink.
-6. Return the [`AuditReceipt`](./data-model.md#auditreceipt-definition) provided
+7. Return the [`AuditReceipt`](./data-model.md#auditreceipt-definition) provided
    by the sink.
 
 If the synchronous `emit` cannot obtain an acknowledgement within the
@@ -303,6 +308,36 @@ prevent concurrent invocations.
 The SDK MUST provide the simple processor as a built-in. It is the
 default processor for synchronous `emit`.
 
+#### Batching processor
+
+The batching processor accumulates `AuditRecord`s in an internal queue
+and exports them in batches asynchronously. It reduces per-record
+round-trip overhead while retaining the no-drop guarantee: records
+MUST NOT be discarded when the batch queue is full; the processor MUST
+apply back-pressure or switch to disk-backed storage instead.
+
+The batching processor MUST still satisfy the at-least-once delivery
+requirement: if the process exits before a batch is exported, buffered
+records MUST be recoverable (e.g. via a disk-backed queue).
+
+**Configurable parameters:**
+
+- `exporter` – the `AuditRecordExporter` to which batches are pushed.
+- `maxQueueSize` – maximum number of records held in memory before
+  back-pressure is applied. Default: 2048.
+- `scheduledDelayMillis` – how long the processor waits before
+  exporting an incomplete batch. Default: 5000 ms.
+- `exportTimeoutMillis` – maximum time allowed for a single `Export`
+  call. Default: 30 000 ms.
+- `maxExportBatchSize` – maximum number of records per exported batch.
+  Default: 512.
+- `maxRetryCount` – maximum export retry attempts before surfacing a
+  hard error. Default: 5.
+- `initialBackoffMillis` – initial wait between retries; doubled on
+  each attempt (exponential back-off). Default: 1000 ms.
+
+The SDK SHOULD provide the batching processor as a built-in.
+
 #### Signing processor (Sig)
 
 The signing processor adds a digital signature to each `AuditRecord` to
@@ -397,6 +432,23 @@ accepted), and retry the full batch.
 This constraint ensures that no audit record can be silently lost by a
 receiver that acknowledges only part of a batch.
 
+#### Idempotency
+
+The OTLP receiver SHOULD treat `RecordId` as an idempotency key.
+
+When a record with an already-known `RecordId` arrives:
+
+- If the canonical payload hash is **identical**, the receiver SHOULD
+  return a deterministic success response for the existing record
+  without creating a duplicate entry.
+- If the canonical payload hash **differs**, the receiver MUST return
+  a conflict error (HTTP 409 or equivalent). The SDK exporter MUST
+  treat a conflict error as a non-retryable `Failure`.
+
+This ensures that retries after transient failures do not produce
+duplicate audit entries, provided the caller uses a stable `RecordId`
+across retry attempts.
+
 #### InstrumentationScope
 
 `InstrumentationScope` has no meaning for audit logging. Audit records
@@ -450,6 +502,49 @@ An application or library MAY emit both an `AuditRecord` (for
 compliance) and a regular `LogRecord` (for observability) for the same
 event. The records travel through independent pipelines to independent
 backends and MUST NOT interfere with each other.
+
+## Collector pipeline (Tier-2)
+
+In enterprise deployments an OpenTelemetry Collector typically sits
+between the SDK exporter and the final audit sink. This collector acts
+as a **Tier-2** intermediary that can verify record integrity,
+distribute records to multiple sinks, and provide delivery tracking.
+
+```
+Application
+    │
+    ▼  /v1/audit  (SDK exporter)
+OTel Collector  ──► verify hash/signature
+    │                └── forward to required sinks
+    ├──► Primary sink  (OpenSearch, Splunk, …)
+    ├──► Secondary sink (S3 WORM, cold archive)
+    └──► SIEM
+
+Collector returns delivery status per sink to the SDK exporter.
+```
+
+The SDK exporter interacts with the Tier-2 collector via the same
+`/v1/audit` endpoint; no API changes are required at the SDK level.
+
+The Tier-2 collector SHOULD:
+
+- Verify the `IntegrityHash`, `Signature`, or `Hmac` of each received
+  record against the declared algorithm and key.
+- Validate `SequenceNo` continuity and `PrevHash` chain integrity when
+  these optional fields are present.
+- Deliver each record to every configured required sink before
+  returning a success response to the SDK exporter.
+- Return a conflict error (HTTP 409) when a duplicate `RecordId` with
+  a differing payload hash is received.
+- Expose per-sink delivery status in its response so that operators can
+  detect partial delivery failures.
+
+The Tier-2 collector MUST NOT respond with partial success (see
+[No partial success](#no-partial-success)). If any required sink
+rejects the record the collector MUST reject the entire request.
+
+For the full Tier-2 collector specification see
+[Audit Logging Collector](./collector.md).
 
 ## Observability
 

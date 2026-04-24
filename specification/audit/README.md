@@ -94,13 +94,17 @@ Application code
       │
       ▼
  AuditLogger.emit(AuditRecord) ──► returns AuditReceipt
-      │
+      │   RecordId (caller-generated)
       ▼
  AuditProvider  (no sampling, no dropping)
       │   └── AuditRecordProcessor (enrich only – never redact or drop)
+      │           ├── Simple processor (sync, default)
+      │           ├── Batching processor (async, high-volume)
+      │           └── Signing processor (adds Signature or Hmac)
       ▼
- AuditExporter  ──► Audit sink (OpenSearch, Splunk, S3 WORM, SIEM, …)
-                        │
+ AuditExporter  ──► Tier-2 Collector (optional)  ──► Audit sinks
+             or ──► Audit sink directly                    │
+                        │                    (OpenSearch, Splunk, S3 WORM …)
                         └── returns AuditReceipt
                               (RecordId + IntegrityHash + SinkTimestamp)
 ```
@@ -149,6 +153,7 @@ payload carrier. The following OTLP envelope layers apply:
 - [Audit Logging API](./api.md)
 - [Audit Logging SDK](./sdk.md)
 - [Audit Record Data Model](./data-model.md)
+- [Audit Logging Collector (Tier-2)](./collector.md)
 
 ## References
 
