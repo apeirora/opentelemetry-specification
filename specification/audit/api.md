@@ -26,7 +26,7 @@ weight: 1
 </details>
 
 The Audit Logging API provides application code with a means to emit
-[`AuditRecord`s](./data-model.md#auditrecord) that are guaranteed to
+[`AuditRecord`s](./data-model.md#auditrecord-definition) that are guaranteed to
 reach the configured audit sink without loss or modification.
 
 The API consists of these main components:
@@ -34,7 +34,7 @@ The API consists of these main components:
 - [**AuditProvider**](#auditprovider) – the entry point of the API.
   Provides access to `AuditLogger` instances.
 - [**AuditLogger**](#auditlogger) – emits `AuditRecord`s and returns
-  an [`AuditReceipt`](./data-model.md#auditreceipt).
+  an [`AuditReceipt`](./data-model.md#auditreceipt-definition).
 
 ```mermaid
 graph TD
@@ -50,7 +50,7 @@ Unlike the [Logs API](../logs/api.md), the Audit Logging API:
   is prohibited.
 - Does **not** accept a sampling-related configuration: the pipeline
   MUST NOT sample or drop records.
-- Has `emit` return an [`AuditReceipt`](./data-model.md#auditreceipt)
+- Has `emit` return an [`AuditReceipt`](./data-model.md#auditreceipt-definition)
   as proof-of-delivery once the sink acknowledges the record.
 
 ## AuditProvider
@@ -153,7 +153,7 @@ The API MUST accept the following optional parameters:
   public-key certificate for signature verification.
 
 **Return value**: The API MUST return an
-[`AuditReceipt`](./data-model.md#auditreceipt) when the audit sink
+[`AuditReceipt`](./data-model.md#auditreceipt-definition) when the audit sink
 acknowledges that the record has been persisted. The receipt contains
 a `RecordId`, an `IntegrityHash`, and a `SinkTimestamp`.
 
