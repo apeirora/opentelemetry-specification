@@ -20,7 +20,6 @@ weight: 1
 - [Optional and required parameters](#optional-and-required-parameters)
 - [Concurrency requirements](#concurrency-requirements)
 - [References](#references)
-
 <!-- tocstop -->
 
 </details>
@@ -120,6 +119,10 @@ returning an `AuditReceipt`.
 
 The API MUST accept the following parameters:
 
+- [`RecordId`](./data-model.md#field-recordid) (required): a
+  caller-generated unique identifier for this record. If the caller
+  does not provide one the SDK MUST generate a UUID v4. The value
+  MUST be stable across retries of the same event.
 - [`Timestamp`](./data-model.md#field-timestamp) (required): the time
   at which the auditable action occurred.
 - [`EventName`](./data-model.md#field-eventname) (required): the
@@ -137,6 +140,8 @@ The API MUST accept the following optional parameters:
 
 - [`ObservedTimestamp`](./data-model.md#field-observedtimestamp)
   (optional): if not set, the SDK MUST set this to the current time.
+- [`SchemaVersion`](./data-model.md#field-schemaversion) (optional):
+  the schema version of the audit payload. SHOULD be set.
 - [`TargetResource`](./data-model.md#field-targetresource) (optional):
   the object upon which the action was performed.
 - [`SourceIP`](./data-model.md#field-sourceip) (optional): the source
@@ -151,11 +156,21 @@ The API MUST accept the following optional parameters:
   signature algorithm; MUST be set if `Signature` is set.
 - [`Certificate`](./data-model.md#field-certificate) (optional): the
   public-key certificate for signature verification.
+- [`Hmac`](./data-model.md#field-hmac) (optional): symmetric HMAC over
+  the record (alternative to `Signature`). MUST NOT be set together
+  with `Signature`.
+- [`HmacAlgorithm`](./data-model.md#field-hmacalgorithm) (optional):
+  the HMAC algorithm; MUST be set if `Hmac` is set.
+- [`SequenceNo`](./data-model.md#field-sequenceno) (optional):
+  monotonic counter for hash-chain continuity.
+- [`PrevHash`](./data-model.md#field-prevhash) (optional): SHA-256 of
+  the preceding record in the audit stream.
 
 **Return value**: The API MUST return an
 [`AuditReceipt`](./data-model.md#auditreceipt-definition) when the audit sink
-acknowledges that the record has been persisted. The receipt contains
-a `RecordId`, an `IntegrityHash`, and a `SinkTimestamp`.
+acknowledges that the record has been persisted. The receipt echoes the
+caller's `RecordId` and contains an `IntegrityHash` and a
+`SinkTimestamp`.
 
 **Delivery semantics**: `emit` is synchronous by default. It MUST block
 the calling thread until the exporter receives a successful
