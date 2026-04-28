@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   stale:
+    if: github.repository == 'open-telemetry/opentelemetry-specification'
     permissions:
       pull-requests: write # required for marking and closing stale PRs
     runs-on: ubuntu-latest
