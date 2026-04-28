@@ -12,6 +12,8 @@ permissions: {}
 
 jobs:
   analysis:
+    if: github.repository == 'open-telemetry/opentelemetry-specification'
+    runs-on: ubuntu-latest
     permissions:
       contents: read # for actions/checkout
       id-token: write # for Scorecard to publish results
