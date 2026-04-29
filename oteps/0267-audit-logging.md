@@ -124,9 +124,7 @@ failure.
 | `SourceIP`          | `string`                | Source network address, if applicable.                                                                                               |
 | `Body`              | `AnyValue`              | Free-form text or protobuf with additional details about the event.                                                                  |
 | `Attributes`        | `map<string, AnyValue>` | Arbitrary key-value pairs for additional context.                                                                                    |
-| `Signature`         | `bytes`                 | Digital signature of the audit record for integrity verification.                                                                    |
-| `Algorithm`         | `string`                | Algorithm used for the digital signature (e.g., `RS256`, `ES256`).                                                                   |
-| `Certificate`       | `bytes`                 | Digital public certificate used for the signature verification.                                                                      |
+| `IntegrityValue`    | `bytes`                 | Cryptographic integrity proof (signature or HMAC); algorithm in `audit.integrity.algorithm`, key in `audit.integrity.certificate`.   |
 
 ### AuditReceipt
 
@@ -178,11 +176,19 @@ records.
 
 The three OTLP envelope layers that **do** apply to audit logging are:
 
-| OTLP layer         | Role in audit logging                                          |
-|--------------------|----------------------------------------------------------------|
-| `Resource`         | Identifies the emitting service/host – reused without change.  |
-| `LogRecord` (body) | Carries the `AuditRecord` payload.                             |
-| `Attributes`       | Key-value context (user ID, IP, outcome, …) – reused as-is.    |
+| OTLP layer         | Role in audit logging                                       |
+|--------------------|-------------------------------------------------------------|
+| `Resource`         | Emitting service / host; carries integrity attrs.           |
+| `LogRecord` (body) | Carries the `AuditRecord` payload.                          |
+| `Attributes`       | Key-value context (user ID, IP, outcome, …) – reused as-is. |
+
+The `Resource` MUST carry the following attributes whenever any
+record in the batch includes an `IntegrityValue`:
+
+| Attribute                     | Type     | Description                                                                                                 |
+|-------------------------------|----------|-------------------------------------------------------------------------------------------------------------|
+| `audit.integrity.algorithm`   | `string` | Algorithm used to compute `IntegrityValue` (JWA identifier for signatures, IANA MAC identifier for HMACs).  |
+| `audit.integrity.certificate` | `string` | Key reference: full DER cert (base64), fingerprint, Key ID, SKI, or Issuer+Serial. Not for HMAC algorithms. |
 
 #### Durability at the sink is out of scope
 
@@ -240,12 +246,12 @@ If the exporter cannot reach the sink:
 
 ## Trade-offs and mitigations
 
-| Trade-off                                                  | Mitigation                                                                                                                   |
-|------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
-| Synchronous `emit` adds latency to the calling thread      | An async variant with a durable local queue mitigates this; the queue size and flush interval are configurable.              |
-| A separate pipeline increases SDK complexity               | The audit pipeline deliberately reuses `LogRecord` as its wire format, so OTLP exporters can be reused with minimal changes. |
-| SHA-256 receipt requires a round-trip to the sink          | The receipt is optional for callers that do not need proof-of-delivery; a fire-and-forget async mode MAY omit it.            |
-| Disk-backed queue introduces a dependency on localStorage  | This is opt-in; the default is an in-memory queue with blocking back-pressure.                                               |
+| Trade-off                                                 | Mitigation                                                                                                                   |
+|-----------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| Synchronous `emit` adds latency to the calling thread     | An async variant with a durable local queue mitigates this; the queue size and flush interval are configurable.              |
+| A separate pipeline increases SDK complexity              | The audit pipeline deliberately reuses `LogRecord` as its wire format, so OTLP exporters can be reused with minimal changes. |
+| SHA-256 receipt requires a round-trip to the sink         | The receipt is optional for callers that do not need proof-of-delivery; a fire-and-forget async mode MAY omit it.            |
+| Disk-backed queue introduces a dependency on localStorage | This is opt-in; the default is an in-memory queue with blocking back-pressure.                                               |
 
 ## Prior art and alternatives
 

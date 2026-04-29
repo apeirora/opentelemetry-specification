@@ -33,11 +33,8 @@ weight: 2
     - [Field: `Body`](#field-body)
     - [Field: `Attributes`](#field-attributes)
     - [Integrity Fields](#integrity-fields)
-      - [Field: `Signature`](#field-signature)
-      - [Field: `Algorithm`](#field-algorithm)
-      - [Field: `Certificate`](#field-certificate)
-      - [Field: `Hmac`](#field-hmac)
-      - [Field: `HmacAlgorithm`](#field-hmacalgorithm)
+      - [Field: `IntegrityValue`](#field-integrityvalue)
+      - [Integrity Resource Attributes](#integrity-resource-attributes)
     - [Optional Ordering Fields](#optional-ordering-fields)
       - [Field: `SequenceNo`](#field-sequenceno)
       - [Field: `PrevHash`](#field-prevhash)
@@ -69,8 +66,9 @@ requirements:
 - The data model MUST include timestamps that allow clock-skew detection
   across distributed services (ISO 27001 – clock synchronisation).
 
-- The data model MUST support optional digital signatures so that
-  records can be verified for integrity after delivery.
+- The data model MUST support optional cryptographic integrity proofs
+  (asymmetric digital signatures or symmetric HMACs) so that records
+  can be verified for integrity after delivery.
 
 - The data model MUST be efficiently representable in OTLP by reusing
   the existing `LogRecord` proto message as a transport container.
@@ -95,10 +93,14 @@ The following OTLP envelope layers apply to audit records:
 
 | OTLP layer             | Role in audit logging                                  |
 |------------------------|--------------------------------------------------------|
-| `Resource`             | Identifies the emitting service / host – reused as-is. |
+| `Resource`             | Emitting service / host; integrity attrs (see below).  |
 | `LogRecord`            | Carries the `AuditRecord` payload (see mapping below). |
 | `Attributes`           | Key-value context – reused as-is.                      |
 | `InstrumentationScope` | **Not applicable.** MUST be left empty.                |
+
+The `Resource` also carries `audit.integrity.algorithm` and
+`audit.integrity.certificate` — see
+[Integrity Resource Attributes](#integrity-resource-attributes).
 
 ## AuditRecord Definition
 
@@ -123,11 +125,7 @@ descriptions follow.
 | `SourceIP`          | `string`                | MAY    | Source network address.                            |
 | `Body`              | `AnyValue`              | MAY    | Free-form additional event details.                |
 | `Attributes`        | `map<string, AnyValue>` | MAY    | Arbitrary key-value context.                       |
-| `Signature`         | `bytes`                 | MAY    | Asymmetric digital signature of the record.        |
-| `Algorithm`         | `string`                | MAY    | Signature algorithm (e.g. `ES256`).                |
-| `Certificate`       | `bytes`                 | MAY    | Public certificate for signature verification.     |
-| `Hmac`              | `bytes`                 | MAY    | Symmetric HMAC of the record (alt. to Signature).  |
-| `HmacAlgorithm`     | `string`                | MAY    | HMAC algorithm (e.g. `HMAC-SHA256`).               |
+| `IntegrityValue`    | `bytes`                 | MAY    | Cryptographic integrity proof (signature or HMAC). |
 | `SequenceNo`        | `uint64`                | MAY    | Monotonic counter for hash-chain continuity.       |
 | `PrevHash`          | `string`                | MAY    | SHA-256 of the previous record in the chain.       |
 
@@ -389,76 +387,79 @@ The integrity fields enable a relying party to verify that an
 SHOULD be set in environments where tamper evidence is required by the
 applicable compliance framework.
 
-#### Field: `Signature`
+#### Field: `IntegrityValue`
 
 | Property | Value      |
 |----------|------------|
 | Type     | `bytes`    |
 | Required | MAY be set |
 
-A digital signature over the canonical serialization of the
-`AuditRecord`. The signature MUST cover all mandatory fields plus any
+A cryptographic integrity proof over the canonical serialization of the
+`AuditRecord`. `IntegrityValue` MUST cover all mandatory fields plus any
 `Attributes` and `Body` that are present at emission time.
 
-If `Signature` is set, `Algorithm` MUST also be set.
+The proof is either an asymmetric digital signature or a symmetric
+HMAC, as indicated by `audit.integrity.algorithm`. If
+`IntegrityValue` is set, `audit.integrity.algorithm` MUST be set as
+a `Resource` attribute (see
+[Integrity Resource Attributes](#integrity-resource-attributes)).
 
-#### Field: `Algorithm`
+### Integrity Resource Attributes
 
-| Property | Value                             |
-|----------|-----------------------------------|
-| Type     | `string`                          |
-| Required | MUST be set if `Signature` is set |
+The signing algorithm and key reference are identical for every
+`AuditRecord` emitted by a given service instance. They are therefore
+carried once as OTel `Resource` attributes instead of being repeated
+in every record.
 
-The algorithm used to compute `Signature`. The value SHOULD be a
-registered JWA algorithm identifier, for example `RS256`, `ES256`, or
-`EdDSA`.
+#### Attribute: `audit.integrity.algorithm`
 
-#### Field: `Certificate`
+| Property | Value                                  |
+|----------|----------------------------------------|
+| Type     | `string`                               |
+| Required | MUST be set if `IntegrityValue` is set |
+
+The algorithm used to compute `IntegrityValue` for all records
+produced by this resource.
+
+- For asymmetric signatures the value SHOULD be a registered JWA
+  algorithm identifier, for example `RS256`, `ES256`, or `EdDSA`.
+- For symmetric HMACs the value SHOULD be a registered IANA MAC
+  algorithm identifier, for example `HMAC-SHA256` or `HMAC-SHA512`.
+
+#### Attribute: `audit.integrity.certificate`
 
 | Property | Value      |
 |----------|------------|
-| Type     | `bytes`    |
+| Type     | `string`   |
 | Required | MAY be set |
 
-The public-key certificate (DER-encoded X.509) corresponding to the
-signing key, included so that relying parties can verify `Signature`
-without an out-of-band key lookup.
+A reference to the signing key used to produce `IntegrityValue`.
+MUST NOT be set when `audit.integrity.algorithm` denotes a symmetric
+MAC algorithm.
 
-Alternatively, Key ID, Subject Key Identifier (SKI), Issuer + SerialNumber or
-other key reference MAY be included as an attribute instead of the full
-certificate, but this is less self-contained and requires additional
-configuration on the relying party side to resolve the key reference.
+The value MUST be one of the following forms, listed from most to
+least self-contained:
 
-If `Certificate` is omitted, the relying party MUST obtain the public
-key through a separately configured trust anchor.
+- **Full certificate** – base64 (standard encoding, no line wrapping)
+  of the DER-encoded X.509 public-key certificate. Relying parties
+  can verify `IntegrityValue` without any out-of-band lookup.
+- **Fingerprint** – A hash string in the form `sha256:<hex>` or
+  `sha1:<hex>`, where `<hex>` is the colon-separated hex encoding of
+  the DER certificate hash (e.g. `sha256:4A:6C:9F:…`). Requires
+  matching against a locally trusted certificate.
+- **Key ID** – An opaque string identifier (e.g. a JWK `kid` claim
+  such as `key-2024-01`) agreed between emitter and relying party.
+  Requires key retrieval via JWK Set URI or equivalent.
+- **SKI** – Subject Key Identifier in colon-separated hex
+  (e.g. `3C:F0:…`). Requires a PKI lookup.
+- **Issuer + Serial** – Issuer Distinguished Name and serial number
+  separated by a slash (e.g. `CN=MyCA,O=Acme Corp/12345`). Requires
+  a PKI lookup.
 
-#### Field: `Hmac`
-
-| Property | Value                                     |
-|----------|-------------------------------------------|
-| Type     | `bytes`                                   |
-| Required | MAY be set                                |
-| Mutual   | MUST NOT be set together with `Signature` |
-
-A symmetric HMAC over the canonical serialization of the
-`AuditRecord`. `Hmac` is an alternative to `Signature` for deployments
-where a full asymmetric PKI is not available. The HMAC MUST cover all
-mandatory fields plus any `Attributes` and `Body` present at emission
-time.
-
-If `Hmac` is set, `HmacAlgorithm` MUST also be set.
-`Hmac` and `Signature` MUST NOT both be set on the same record.
-
-#### Field: `HmacAlgorithm`
-
-| Property | Value                           |
-|----------|---------------------------------|
-| Type     | `string`                        |
-| Required | MUST be set if `Hmac` is set    |
-
-The algorithm used to compute `Hmac`. The value SHOULD be a registered
-IANA MAC algorithm identifier, for example `HMAC-SHA256` or
-`HMAC-SHA512`.
+If `audit.integrity.certificate` is omitted and
+`audit.integrity.algorithm` denotes an asymmetric algorithm, the
+relying party MUST obtain the public key through a separately
+configured trust anchor.
 
 ### Optional Ordering Fields
 
