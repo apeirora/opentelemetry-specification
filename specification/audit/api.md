@@ -150,17 +150,12 @@ The API MUST accept the following optional parameters:
   event details.
 - [`Attributes`](./data-model.md#field-attributes) (optional):
   arbitrary key-value context pairs.
-- [`Signature`](./data-model.md#field-signature) (optional): digital
-  signature over the record.
-- [`Algorithm`](./data-model.md#field-algorithm) (optional): the
-  signature algorithm; MUST be set if `Signature` is set.
-- [`Certificate`](./data-model.md#field-certificate) (optional): the
-  public-key certificate for signature verification.
-- [`Hmac`](./data-model.md#field-hmac) (optional): symmetric HMAC over
-  the record (alternative to `Signature`). MUST NOT be set together
-  with `Signature`.
-- [`HmacAlgorithm`](./data-model.md#field-hmacalgorithm) (optional):
-  the HMAC algorithm; MUST be set if `Hmac` is set.
+- [`IntegrityValue`](./data-model.md#field-integrityvalue) (optional):
+  cryptographic integrity proof over the record – either an asymmetric
+  digital signature or a symmetric HMAC. The signing algorithm is
+  configured via the `audit.integrity.algorithm` `Resource` attribute
+  on the `AuditProvider`; the key reference via
+  `audit.integrity.certificate`.
 - [`SequenceNo`](./data-model.md#field-sequenceno) (optional):
   monotonic counter for hash-chain continuity.
 - [`PrevHash`](./data-model.md#field-prevhash) (optional): SHA-256 of
