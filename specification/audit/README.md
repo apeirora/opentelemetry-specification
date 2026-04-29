@@ -100,7 +100,7 @@ Application code
       │   └── AuditRecordProcessor (enrich only – never redact or drop)
       │           ├── Simple processor (sync, default)
       │           ├── Batching processor (async, high-volume)
-      │           └── Signing processor (adds Signature or Hmac)
+      │           └── Signing processor (adds IntegrityValue)
       ▼
  AuditExporter  ──► Tier-2 Collector (optional)  ──► Audit sinks
              or ──► Audit sink directly                    │
@@ -143,7 +143,7 @@ payload carrier. The following OTLP envelope layers apply:
 
 | OTLP layer             | Role in audit logging                                  |
 |------------------------|--------------------------------------------------------|
-| `Resource`             | Identifies the emitting service / host – reused as-is. |
+| `Resource`             | Emitting service / host; integrity attrs on Resource.  |
 | `LogRecord` (body)     | Carries the `AuditRecord` payload.                     |
 | `Attributes`           | Key-value context (actor, outcome, …) – reused as-is.  |
 | `InstrumentationScope` | **Not applicable.** MUST be left empty by exporters.   |
