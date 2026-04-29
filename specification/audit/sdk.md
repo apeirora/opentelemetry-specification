@@ -162,14 +162,17 @@ MUST NOT silently drop the record.
 
 When `emit` is called, the SDK MUST:
 
-1. If the caller did not provide a `RecordId`, generate a UUID v4 and
-   set it on the record before any further processing.
+1. If `Attributes` does not contain `audit.record.id`, generate a
+   UUID v4 and inject it into `Attributes` before any further
+   processing.
 2. Set `ObservedTimestamp` to the current time if the caller did not
    provide it.
-3. Validate that all required fields (`RecordId`, `Timestamp`,
-   `EventName`, `Actor`, `ActorType`, `Action`, `Outcome`) are present
-   and non-empty. If any required field is missing, `emit` MUST surface
-   a hard error to the caller and MUST NOT silently drop the record.
+3. Validate that the required LogRecord fields (`Timestamp`,
+   `EventName`) and the mandatory attributes (`audit.actor.id`,
+   `audit.actor.type`, `audit.action`, `audit.outcome`) are present
+   and non-empty. If any required field or attribute is missing,
+   `emit` MUST surface a hard error to the caller and MUST NOT
+   silently drop the record.
 4. Enqueue the `AuditRecord` in the [AuditRecord Queue](#auditrecord-queue).
 5. Pass the record through all registered
    `AuditRecordProcessor` instances via
@@ -231,10 +234,11 @@ The Audit Logging pipeline enforces strict restrictions on processors
 to guarantee that no record is lost or altered:
 
 - Only **additive** operations are permitted: processors MAY enrich
-  records by adding `Attributes`, but MUST NOT remove
-  existing attributes, filter records, aggregate records, or alter the
-  mandatory fields (`Timestamp`, `EventName`, `Actor`, `ActorType`,
-  `Action`, `Outcome`).
+  records by adding `Attributes`, but MUST NOT remove existing
+  attributes, filter records, aggregate records, or alter the mandatory
+  LogRecord fields (`Timestamp`, `EventName`) or the mandatory
+  attributes (`audit.actor.id`, `audit.actor.type`, `audit.action`,
+  `audit.outcome`).
 - Processors that delete attributes, suppress records, or aggregate
   records MUST be rejected at configuration time with an explanatory
   error.
@@ -340,13 +344,14 @@ The SDK SHOULD provide the batching processor as a built-in.
 
 #### Signing processor (Sig)
 
-The signing processor computes an `IntegrityValue` for each `AuditRecord`
-to provide tamper-evidence. The value is either an asymmetric digital
-signature or a symmetric HMAC, as determined by the
-`audit.integrity.algorithm` `Resource` attribute configured on the
-`AuditProvider`. It MUST be implemented as a separate processor that can
-be added to the pipeline in addition to the simple processor, to allow
-flexibility in the choice of signing algorithm and key management strategy.
+The signing processor computes an `audit.integrity.value` attribute
+for each `AuditRecord` to provide tamper-evidence. The value is a
+base64-encoded asymmetric digital signature or symmetric HMAC, as
+determined by the `audit.integrity.algorithm` `Resource` attribute
+configured on the `AuditProvider`. It MUST be implemented as a
+separate processor that can be added to the pipeline in addition to
+the simple processor, to allow flexibility in the choice of signing
+algorithm and key management strategy.
 
 ## AuditRecordExporter
 
@@ -436,9 +441,10 @@ receiver that acknowledges only part of a batch.
 
 #### Idempotency
 
-The OTLP receiver SHOULD treat `RecordId` as an idempotency key.
+The OTLP receiver SHOULD treat `audit.record.id` as an idempotency
+key.
 
-When a record with an already-known `RecordId` arrives:
+When a record with an already-known `audit.record.id` arrives:
 
 - If the canonical payload hash is **identical**, the receiver SHOULD
   return a deterministic success response for the existing record
@@ -530,11 +536,12 @@ The SDK exporter interacts with the Tier-2 collector via the same
 
 The Tier-2 collector SHOULD:
 
-- Verify `IntegrityValue` of each received record against the algorithm
-  declared in the `Resource` attribute `audit.integrity.algorithm` and
-  the key material referenced by `audit.integrity.certificate`.
-- Validate `SequenceNo` continuity and `PrevHash` chain integrity when
-  these optional fields are present.
+- Verify `audit.integrity.value` of each received record against the
+  algorithm declared in the `Resource` attribute
+  `audit.integrity.algorithm` and the key material referenced by
+  `audit.integrity.certificate`.
+- Validate `audit.sequence.number` continuity and `audit.prev.hash`
+  chain integrity when these optional attributes are present.
 - Deliver each record to every configured required sink before
   returning a success response to the SDK exporter.
 - Return a conflict error (HTTP 409) when a duplicate `RecordId` with
