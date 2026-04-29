@@ -106,8 +106,10 @@ Each record MUST include:
 
 Each record MAY include any field defined in the
 [AuditRecord Definition](./data-model.md#auditrecord-definition),
-including `SchemaVersion`, `Signature`, `Algorithm`, `Certificate`,
-`Hmac`, `HmacAlgorithm`, `SequenceNo`, and `PrevHash`.
+including `SchemaVersion`, `IntegrityValue`, `SequenceNo`, and
+`PrevHash`. The signing algorithm and key reference are carried as
+`Resource` attributes `audit.integrity.algorithm` and
+`audit.integrity.certificate`.
 
 ## Response Model
 
@@ -190,9 +192,10 @@ When a duplicate `RecordId` is received:
 
 ### Integrity Verification
 
-When `Signature` or `Hmac` is present the collector SHOULD verify the
-field against the declared algorithm and the public key or shared
-secret configured in the collector's trust policy.
+When `IntegrityValue` is present the collector SHOULD verify it
+against the algorithm declared in the `Resource` attribute
+`audit.integrity.algorithm` and the key material referenced by
+`audit.integrity.certificate` in the collector's trust policy.
 
 The collector MAY defer verification for low-latency ingest (returning
 `accepted_pending_verify`) but MUST complete verification before
@@ -277,8 +280,9 @@ The collector ingress MUST require secure transport and SHOULD support:
 - Token-based authentication (e.g. Bearer token) where mTLS is not
   used.
 
-The collector SHOULD validate `Signature` or `Hmac` fields according
-to a configured verification policy before forwarding records to sinks.
+The collector SHOULD validate `IntegrityValue` according to the
+algorithm in `audit.integrity.algorithm` and the configured
+verification policy before forwarding records to sinks.
 
 ## References
 
