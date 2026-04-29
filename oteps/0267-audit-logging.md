@@ -109,22 +109,56 @@ failure.
 
 ### AuditRecord data model
 
-`AuditRecord` is quite similar to `LogRecord` with the following mandatory fields:
+`AuditRecord` is a `LogRecord` that uses the standard dedicated
+`LogRecord` fields for universal concepts and carries all
+audit-specific data as `Attributes` following the `audit.*` semantic
+convention namespace.
 
-| Field               | Type                    | Description                                                                                                                          |
-|---------------------|-------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `Timestamp`         | `fixed64`               | Nanoseconds since UNIX epoch (UTC). MUST be set. `<= ObservedTimestamp <= now(UTC)`                                                  |
-| `ObservedTimestamp` | `fixed64`               | Nanoseconds since UNIX epoch when the SDK observed the event. Used for clock skew detection. MUST be set. `>= Timestamp <= now(UTC)` |
-| `EventName`         | `string`                | Semantic name of the audit event (e.g. `user.login.success`). MUST be set.                                                           |
-| `Actor`             | `AnyValue`              | Identity that performed the action (user ID, service account, …). MUST be set.                                                       |
-| `ActorType`         | `enum`                  | `USER`, `SERVICE`, `SYSTEM`. MUST be set.                                                                                            |
-| `Outcome`           | `enum`                  | `SUCCESS`, `FAILURE`, `UNKNOWN`. MUST be set.                                                                                        |
-| `Resource`          | `AnyValue`              | The target resource (file, endpoint, table, …). SHOULD be set.                                                                       |
-| `Action`            | `string`                | Verb describing what was done (e.g. `READ`, `WRITE`, `DELETE`, `LOGIN`). MUST be set.                                                |
-| `SourceIP`          | `string`                | Source network address, if applicable.                                                                                               |
-| `Body`              | `AnyValue`              | Free-form text or protobuf with additional details about the event.                                                                  |
-| `Attributes`        | `map<string, AnyValue>` | Arbitrary key-value pairs for additional context.                                                                                    |
-| `IntegrityValue`    | `bytes`                 | Cryptographic integrity proof (signature or HMAC); algorithm in `audit.integrity.algorithm`, key in `audit.integrity.certificate`.   |
+#### LogRecord fields used
+
+| Field               | Type                    | Description                                                                       |
+|---------------------|-------------------------|-----------------------------------------------------------------------------------|
+| `Timestamp`         | `fixed64`               | Time the auditable action occurred. MUST be set.                                  |
+| `ObservedTimestamp` | `fixed64`               | Time the SDK observed the event. MUST be set.                                     |
+| `EventName`         | `string`                | Semantic name of the audit event. MUST be set.                                    |
+| `Body`              | `AnyValue`              | Free-form or structured event details. MAY be set.                                |
+| `Attributes`        | `map<string, AnyValue>` | Carries audit semantic attributes (see below). MUST set all mandatory attributes. |
+| `Resource`          | –                       | Emitting service / host; carries integrity attributes.                            |
+
+`SeverityNumber`, `SeverityText`, and `InstrumentationScope` SHOULD NOT
+be set / SHOULD be left empty for audit records.
+
+#### Audit semantic attributes
+
+Audit-specific data is carried in `Attributes` using the `audit.*`
+semantic convention namespace, or by reusing existing OTel semantic
+convention attributes where a direct mapping exists.
+
+**Mandatory attributes:**
+
+| Attribute name     | Type     | Description                         |
+|--------------------|----------|-------------------------------------|
+| `audit.record.id`  | `string` | Unique stable identifier (UUID v4). |
+| `audit.actor.id`   | `string` | Identity that performed the action. |
+| `audit.actor.type` | `string` | `user`, `service`, or `system`.     |
+| `audit.action`     | `string` | Verb: `LOGIN`, `READ`, `DELETE`, …  |
+| `audit.outcome`    | `string` | `success`, `failure`, or `unknown`. |
+
+**Optional / recommended attributes:**
+
+| Attribute name          | Type     | Description                                           |
+|-------------------------|----------|-------------------------------------------------------|
+| `audit.target.id`       | `string` | Identifier of the resource acted upon.                |
+| `audit.target.type`     | `string` | Type of the target resource.                          |
+| `audit.source.id`       | `string` | Network address or identifier of the source.          |
+| `audit.source.type`     | `string` | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`). |
+| `audit.integrity.value` | `string` | Base64-encoded signature or HMAC.                     |
+| `audit.sequence.number` | `int`    | Monotonic counter for hash-chain continuity.          |
+| `audit.prev.hash`       | `string` | SHA-256 of the preceding record.                      |
+| `audit.schema.version`  | `string` | Schema version (e.g. `1.0.0`).                        |
+
+The `Resource` carries `audit.integrity.algorithm` and
+`audit.integrity.certificate` (unchanged per-service metadata).
 
 ### AuditReceipt
 
@@ -133,7 +167,7 @@ the exporter/sink:
 
 | Field           | Type      | Description                                                                                                                                |
 |-----------------|-----------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| `RecordId`      | `string`  | Unique, stable identifier assigned by the sink.                                                                                            |
+| `RecordId`      | `string`  | Echoes the `audit.record.id` attribute of the persisted record.                                                                            |
 | `IntegrityHash` | `string`  | SHA-256 of the canonical serialization of the `AuditRecord`, computed by the sink after successful write. Used for integrity verification. |
 | `SinkTimestamp` | `fixed64` | Nanoseconds since UNIX epoch when the sink persisted the record.                                                                           |
 
@@ -176,19 +210,23 @@ records.
 
 The three OTLP envelope layers that **do** apply to audit logging are:
 
-| OTLP layer         | Role in audit logging                                       |
-|--------------------|-------------------------------------------------------------|
-| `Resource`         | Emitting service / host; carries integrity attrs.           |
-| `LogRecord` (body) | Carries the `AuditRecord` payload.                          |
-| `Attributes`       | Key-value context (user ID, IP, outcome, …) – reused as-is. |
+| OTLP layer   | Role in audit logging                                              |
+|--------------|--------------------------------------------------------------------|
+| `Resource`   | Emitting service / host; carries integrity attrs.                  |
+| `LogRecord`  | Carries `AuditRecord` via dedicated fields and `Attributes`.       |
+| `Attributes` | Mandatory and optional `audit.*` attributes; see data model above. |
 
 The `Resource` MUST carry the following attributes whenever any
-record in the batch includes an `IntegrityValue`:
+record in the batch includes an `audit.integrity.value`:
 
-| Attribute                     | Type     | Description                                                                                                 |
-|-------------------------------|----------|-------------------------------------------------------------------------------------------------------------|
+| Attribute                     | Type     | Description                           |
+|-------------------------------|----------|---------------------------------------|
 | `audit.integrity.algorithm`   | `string` | Algorithm used to compute `IntegrityValue` (JWA identifier for signatures, IANA MAC identifier for HMACs).  |
 | `audit.integrity.certificate` | `string` | Key reference: full DER cert (base64), fingerprint, Key ID, SKI, or Issuer+Serial. Not for HMAC algorithms. |
+
+See
+[Integrity Resource Attributes](../specification/audit/data-model.md#integrity-resource-attributes)
+for the full field descriptions.
 
 #### Durability at the sink is out of scope
 
