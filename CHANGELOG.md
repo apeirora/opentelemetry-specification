@@ -37,6 +37,9 @@ release.
 
 ### Common
 
+- Define the Core packages term.
+  ([#5046](https://github.com/open-telemetry/opentelemetry-specification/pull/5046))
+
 ### OpenTelemetry Protocol
 
 ### Compatibility
@@ -46,6 +49,8 @@ release.
     ([#5004](https://github.com/open-telemetry/opentelemetry-specification/pull/5004))
   - Stabilize OpenTelemetry Gauge and Sum to Prometheus transformations.
     ([#5034](https://github.com/open-telemetry/opentelemetry-specification/pull/5034))
+  - Stabilize OpenTelemetry Instrumentation Scope to Prometheus labels transformation.
+    ([#5052](https://github.com/open-telemetry/opentelemetry-specification/pull/5052))
 
 ### SDK Configuration
 
