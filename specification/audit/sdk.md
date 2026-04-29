@@ -340,10 +340,12 @@ The SDK SHOULD provide the batching processor as a built-in.
 
 #### Signing processor (Sig)
 
-The signing processor adds a digital signature to each `AuditRecord` to
-guarantee integrity and non-repudiation. It MUST be implemented as a separate
-processor that can be added to the pipeline in addition to the simple
-processor, rather than as a modification to the simple processor, to allow
+The signing processor computes an `IntegrityValue` for each `AuditRecord`
+to provide tamper-evidence. The value is either an asymmetric digital
+signature or a symmetric HMAC, as determined by the
+`audit.integrity.algorithm` `Resource` attribute configured on the
+`AuditProvider`. It MUST be implemented as a separate processor that can
+be added to the pipeline in addition to the simple processor, to allow
 flexibility in the choice of signing algorithm and key management strategy.
 
 ## AuditRecordExporter
@@ -528,8 +530,9 @@ The SDK exporter interacts with the Tier-2 collector via the same
 
 The Tier-2 collector SHOULD:
 
-- Verify the `IntegrityHash`, `Signature`, or `Hmac` of each received
-  record against the declared algorithm and key.
+- Verify `IntegrityValue` of each received record against the algorithm
+  declared in the `Resource` attribute `audit.integrity.algorithm` and
+  the key material referenced by `audit.integrity.certificate`.
 - Validate `SequenceNo` continuity and `PrevHash` chain integrity when
   these optional fields are present.
 - Deliver each record to every configured required sink before
