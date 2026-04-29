@@ -92,24 +92,27 @@ Request payloads MUST follow the
 
 ### Required Record Fields
 
-Each record MUST include:
+Each record MUST include the following LogRecord fields:
 
-- `RecordId`
 - `Timestamp`
 - `EventName`
-- `Actor`
-- `ActorType`
-- `Action`
-- `Outcome`
+
+And the following mandatory attributes in the `Attributes` map:
+
+- `audit.record.id`
+- `audit.actor.id`
+- `audit.actor.type`
+- `audit.action`
+- `audit.outcome`
 
 ### Optional Record Fields
 
-Each record MAY include any field defined in the
-[AuditRecord Definition](./data-model.md#auditrecord-definition),
-including `SchemaVersion`, `IntegrityValue`, `SequenceNo`, and
-`PrevHash`. The signing algorithm and key reference are carried as
-`Resource` attributes `audit.integrity.algorithm` and
-`audit.integrity.certificate`.
+Each record MAY include any attribute defined in the
+[Audit Semantic Attributes](./data-model.md#audit-semantic-attributes)
+section, including `audit.schema.version`, `audit.integrity.value`,
+`audit.sequence.number`, and `audit.prev.hash`. The signing algorithm
+and key reference are carried as `Resource` attributes
+`audit.integrity.algorithm` and `audit.integrity.certificate`.
 
 ## Response Model
 
@@ -177,9 +180,10 @@ the entire batch (see
 
 ## Idempotency and Duplicate Handling
 
-The collector MUST treat `RecordId` as the primary idempotency key.
+The collector MUST treat `audit.record.id` as the primary idempotency
+key.
 
-When a duplicate `RecordId` is received:
+When a duplicate `audit.record.id` is received:
 
 - If the canonical payload hash is **identical**, the collector SHOULD
   return a deterministic success response for the existing record
@@ -192,8 +196,8 @@ When a duplicate `RecordId` is received:
 
 ### Integrity Verification
 
-When `IntegrityValue` is present the collector SHOULD verify it
-against the algorithm declared in the `Resource` attribute
+When `audit.integrity.value` is present the collector SHOULD verify
+it against the algorithm declared in the `Resource` attribute
 `audit.integrity.algorithm` and the key material referenced by
 `audit.integrity.certificate` in the collector's trust policy.
 
@@ -209,12 +213,13 @@ If verification fails the collector MUST:
 
 ### Hash-Chain Validation
 
-When `SequenceNo` and `PrevHash` are present the collector SHOULD
-validate chain continuity:
+When `audit.sequence.number` and `audit.prev.hash` are present the
+collector SHOULD validate chain continuity:
 
-- `SequenceNo` MUST be strictly greater than the previous record's
-  `SequenceNo` in the same audit stream.
-- `PrevHash` MUST equal the `IntegrityHash` of the preceding record.
+- `audit.sequence.number` MUST be strictly greater than the previous
+  record's `audit.sequence.number` in the same audit stream.
+- `audit.prev.hash` MUST equal the `IntegrityHash` of the preceding
+  record.
 
 A broken chain SHOULD be surfaced as a warning metric and logged as a
 security event. The collector MAY still accept and forward a broken

@@ -18,30 +18,27 @@ weight: 2
     - [Relationship to LogRecord](#relationship-to-logrecord)
     - [OTLP Envelope Layers](#otlp-envelope-layers)
   - [AuditRecord Definition](#auditrecord-definition)
-    - [Field: `RecordId`](#field-recordid)
-    - [Field: `Timestamp`](#field-timestamp)
-    - [Field: `ObservedTimestamp`](#field-observedtimestamp)
-    - [Field: `SchemaVersion`](#field-schemaversion)
-    - [Field: `EventName`](#field-eventname)
-    - [Actor Fields](#actor-fields)
-      - [Field: `Actor`](#field-actor)
-      - [Field: `ActorType`](#field-actortype)
-    - [Field: `Action`](#field-action)
-    - [Field: `Outcome`](#field-outcome)
-    - [Field: `TargetResource`](#field-targetresource)
-    - [Field: `SourceIP`](#field-sourceip)
-    - [Field: `Body`](#field-body)
-    - [Field: `Attributes`](#field-attributes)
-    - [Integrity Fields](#integrity-fields)
-      - [Field: `IntegrityValue`](#field-integrityvalue)
-      - [Integrity Resource Attributes](#integrity-resource-attributes)
-    - [Optional Ordering Fields](#optional-ordering-fields)
-      - [Field: `SequenceNo`](#field-sequenceno)
-      - [Field: `PrevHash`](#field-prevhash)
+    - [LogRecord Field Usage](#logrecord-field-usage)
+      - [Field: `Timestamp`](#field-timestamp)
+      - [Field: `ObservedTimestamp`](#field-observedtimestamp)
+      - [Field: `EventName`](#field-eventname)
+      - [Field: `Body`](#field-body)
+      - [Field: `Attributes`](#field-attributes)
+    - [Audit Semantic Attributes](#audit-semantic-attributes)
+      - [Mandatory Attributes](#mandatory-attributes)
+      - [Attribute: `audit.record.id`](#attribute-auditrecordid)
+      - [Actor Attributes](#actor-attributes)
+      - [Attribute: `audit.action`](#attribute-auditaction)
+      - [Attribute: `audit.outcome`](#attribute-auditoutcome)
+      - [Optional Attributes](#optional-attributes)
+      - [Target Attributes](#target-attributes)
+      - [Source Attributes](#source-attributes)
+      - [Integrity Attributes](#integrity-attributes)
+      - [Ordering Attributes](#ordering-attributes)
+    - [Integrity Resource Attributes](#integrity-resource-attributes)
+      - [Attribute: `audit.integrity.algorithm`](#attribute-auditintegrityalgorithm)
+      - [Attribute: `audit.integrity.certificate`](#attribute-auditintegritycertificate)
   - [AuditReceipt Definition](#auditreceipt-definition)
-    - [Field: `RecordId`](#field-recordid)
-    - [Field: `IntegrityHash`](#field-integrityhash)
-    - [Field: `SinkTimestamp`](#field-sinktimestamp)
   - [Example AuditRecords](#example-auditrecords)
     - [Successful user login](#successful-user-login)
     - [Failed privileged configuration change](#failed-privileged-configuration-change)
@@ -78,25 +75,31 @@ requirements:
 
 ### Relationship to LogRecord
 
-`AuditRecord` is transported as an OTLP `LogRecord`. The mandatory
-audit-specific fields are stored in dedicated `LogRecord` fields where
-a natural mapping exists, and in the `Attributes` map otherwise. The
-`Body` field carries the free-form `AuditRecord.Body` payload.
+An `AuditRecord` is a `LogRecord` that uses the standard dedicated
+`LogRecord` fields for the universal concepts they represent, and
+carries all audit-specific information as `Attributes` following the
+`audit.*` semantic convention namespace.
+
+This follows the established OTel convention: universal concepts
+(timestamps, event name, body, context) receive dedicated top-level
+`LogRecord` fields; signal- and domain-specific information is
+expressed as semantic-convention attributes. Audit records are
+therefore processable by any OTel tooling that understands `LogRecord`s.
 
 The `SeverityNumber` and `SeverityText` fields of the underlying
-`LogRecord` MUST NOT be used for audit records. Severity is not a
-meaningful concept for audit events; `Outcome` serves a similar purpose.
+`LogRecord` SHOULD NOT be set for audit records. Severity is not a
+meaningful concept for audit events; the `audit.outcome` attribute
+serves a structurally similar purpose.
 
 ### OTLP Envelope Layers
 
 The following OTLP envelope layers apply to audit records:
 
-| OTLP layer             | Role in audit logging                                  |
-|------------------------|--------------------------------------------------------|
-| `Resource`             | Emitting service / host; integrity attrs (see below).  |
-| `LogRecord`            | Carries the `AuditRecord` payload (see mapping below). |
-| `Attributes`           | Key-value context – reused as-is.                      |
-| `InstrumentationScope` | **Not applicable.** MUST be left empty.                |
+| OTLP layer             | Role in audit logging                                   |
+|------------------------|---------------------------------------------------------|
+| `Resource`             | Emitting service / host; integrity attrs (see below).   |
+| `LogRecord`            | Carries the `AuditRecord` via dedicated fields and `Attributes`.                                           |
+| `InstrumentationScope` | **Not applicable.** MUST be left empty by exporters.    |
 
 The `Resource` also carries `audit.integrity.algorithm` and
 `audit.integrity.certificate` — see
@@ -105,50 +108,28 @@ The `Resource` also carries `audit.integrity.algorithm` and
 ## AuditRecord Definition
 
 An `AuditRecord` is a single security-relevant event emitted by
-application or system code on behalf of an actor.
+application or system code on behalf of an actor. It is transported
+as a `LogRecord`; the following two tables summarise how `LogRecord`
+fields are used and which semantic attributes carry audit-specific
+data.
 
-The following table provides a summary of all fields. Detailed
-descriptions follow.
+### LogRecord Field Usage
 
-| Field               | Type                    | Req.   | Description                                        |
-|---------------------|-------------------------|--------|----------------------------------------------------|
-| `RecordId`          | `string`                | MUST   | Caller-generated unique identifier.                |
-| `Timestamp`         | `fixed64`               | MUST   | Event time, ns since UNIX epoch (UTC).             |
-| `ObservedTimestamp` | `fixed64`               | MUST   | SDK observation time, ns since UNIX epoch.         |
-| `SchemaVersion`     | `string`                | SHOULD | Schema version of the audit payload.               |
-| `EventName`         | `string`                | MUST   | Semantic name of the audit event.                  |
-| `Actor`             | `AnyValue`              | MUST   | Identity that performed the action.                |
-| `ActorType`         | `enum`                  | MUST   | `USER`, `SERVICE`, or `SYSTEM`.                    |
-| `Action`            | `string`                | MUST   | Verb describing what was done.                     |
-| `Outcome`           | `enum`                  | MUST   | `SUCCESS`, `FAILURE`, or `UNKNOWN`.                |
-| `TargetResource`    | `AnyValue`              | SHOULD | The object acted upon.                             |
-| `SourceIP`          | `string`                | MAY    | Source network address.                            |
-| `Body`              | `AnyValue`              | MAY    | Free-form additional event details.                |
-| `Attributes`        | `map<string, AnyValue>` | MAY    | Arbitrary key-value context.                       |
-| `IntegrityValue`    | `bytes`                 | MAY    | Cryptographic integrity proof (signature or HMAC). |
-| `SequenceNo`        | `uint64`                | MAY    | Monotonic counter for hash-chain continuity.       |
-| `PrevHash`          | `string`                | MAY    | SHA-256 of the previous record in the chain.       |
+| LogRecord Field        | Audit Usage                                   | Required                       |
+|------------------------|-----------------------------------------------|--------------------------------|
+| `Timestamp`            | Time the auditable action occurred            | MUST be set                    |
+| `ObservedTimestamp`    | Time the SDK observed the event               | MUST be set                    |
+| `EventName`            | Semantic name of the audit event type         | MUST be set; MUST NOT be empty |
+| `Body`                 | Free-form or structured event details         | MAY be set                     |
+| `Attributes`           | Audit semantic attributes (see below)         | MUST contain mandatory attrs   |
+| `Resource`             | Emitting service / host metadata              | MUST be set                    |
+| `TraceId`              | Correlation to an active trace, if any        | MAY be set                     |
+| `SpanId`               | Correlation to an active span, if any         | MAY be set                     |
+| `SeverityNumber`       | Not applicable for audit records              | SHOULD NOT be set                |
+| `SeverityText`         | Not applicable for audit records              | SHOULD NOT be set                |
+| `InstrumentationScope` | Not applicable for audit records              | MUST be left empty             |
 
-### Field: `RecordId`
-
-| Property | Value                          |
-|----------|--------------------------------|
-| Type     | `string`                       |
-| Required | MUST be set; MUST NOT be empty |
-
-A caller-generated unique identifier for this `AuditRecord`. The value
-MUST be immutable once set and MUST remain stable across retries so
-that receivers can deduplicate records delivered more than once.
-
-The caller SHOULD use a UUID v4 or an equivalent unpredictable unique
-identifier. The SDK MUST generate a UUID v4 if the caller does not
-provide one.
-
-`RecordId` is echoed back unchanged in the
-[`AuditReceipt`](#auditreceipt-definition), allowing the emitting
-application to correlate receipts with the original `emit` call.
-
-### Field: `Timestamp`
+#### Field: `Timestamp`
 
 | Property   | Value                            |
 |------------|----------------------------------|
@@ -161,14 +142,14 @@ since the UNIX epoch (UTC). The application MUST set this field to the
 time the auditable action actually took place.
 
 If the application cannot determine the precise event time, it SHOULD
-use the current time at the moment of the `emit` call and document this
-in the `Body` or `Attributes`.
+use the current time at the moment of the `emit` call and document
+this in the `Body` or `Attributes`.
 
 The clock used for `Timestamp` MUST be a wall-clock source
 synchronised via NTP or an equivalent protocol. The SDK SHOULD warn at
 startup if the system clock offset exceeds one second.
 
-### Field: `ObservedTimestamp`
+#### Field: `ObservedTimestamp`
 
 | Property   | Value                                              |
 |------------|----------------------------------------------------|
@@ -182,26 +163,11 @@ to the current time when `emit` is called if the application does not
 provide it.
 
 `ObservedTimestamp` enables the audit sink to detect clock skew between
-the emitting service and the SDK host, and between the SDK host and the
-sink. A significant difference between `Timestamp` and
-`ObservedTimestamp` SHOULD be treated as a clock synchronisation
-warning.
+the emitting service and the SDK host. A significant difference between
+`Timestamp` and `ObservedTimestamp` SHOULD be treated as a clock
+synchronisation warning.
 
-### Field: `SchemaVersion`
-
-| Property | Value            |
-|----------|------------------|
-| Type     | `string`         |
-| Required | SHOULD be set    |
-
-The version of the audit payload schema used to produce this record.
-`SchemaVersion` allows receivers and long-term archives to validate
-and interpret records correctly even after the schema evolves.
-
-The value SHOULD follow semantic versioning (e.g. `1.0.0`). If not
-set, the receiver MUST treat the schema version as unknown.
-
-### Field: `EventName`
+#### Field: `EventName`
 
 | Property | Value                          |
 |----------|--------------------------------|
@@ -219,132 +185,10 @@ follow a hierarchical naming convention, for example:
 - `privilege.escalation`
 
 Semantic conventions for common `EventName` values SHOULD be defined
-in the [OpenTelemetry Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/).
+in the
+[OpenTelemetry Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/).
 
-### Actor Fields
-
-Actor fields identify the entity that performed the auditable action.
-Together, `Actor` and `ActorType` provide the minimum identity context
-required by ISO 27001 Annex A item 1 (user IDs).
-
-#### Field: `Actor`
-
-| Property | Value       |
-|----------|-------------|
-| Type     | `AnyValue`  |
-| Required | MUST be set |
-
-The identity of the entity that performed the action. This MAY be:
-
-- A user ID (string or integer)
-- A service account name
-- A fully qualified system identifier
-- A structured object (e.g. `{ "id": "u123", "email": "a@example.com" }`)
-
-If the actor identity cannot be determined (for example, an
-unauthenticated request), `Actor` MUST still be set to a value
-indicating the unknown state (e.g. `"anonymous"` or `"unknown"`).
-
-#### Field: `ActorType`
-
-| Property | Value                       |
-|----------|-----------------------------|
-| Type     | `enum`                      |
-| Required | MUST be set                 |
-| Values   | `USER`, `SERVICE`, `SYSTEM` |
-
-Classifies the kind of entity that performed the action:
-
-| Value     | Meaning                                                |
-|-----------|--------------------------------------------------------|
-| `USER`    | A human user, identified by a user account.            |
-| `SERVICE` | An automated service, daemon, or service account.      |
-| `SYSTEM`  | The operating system or a privileged system component. |
-
-In times of AI agents and autonomous systems, the distinction between `USER`
-and `SERVICE` may become blurred. The `ActorType` values are intended to be
-broad categories rather than rigid classifications, and the SDK MUST NOT
-enforce any particular semantics beyond what is described in the table above.
-Applications SHOULD choose the most appropriate `ActorType` based on the
-context of the action and the identity of the actor. Use `SERVICE` for
-non-human actors that operate autonomously, and `USER` for human-initiated
-actions, even if they are performed by an AI agent on behalf of a user.
-
-### Field: `Action`
-
-| Property | Value                          |
-|----------|--------------------------------|
-| Type     | `string`                       |
-| Required | MUST be set; MUST NOT be empty |
-
-A short verb or verb phrase that describes what the actor did.
-Applications SHOULD use uppercase verbs to distinguish actions from
-event names. Common values include:
-
-`LOGIN`, `LOGOUT`, `READ`, `WRITE`, `CREATE`, `UPDATE`, `DELETE`,
-`EXECUTE`, `APPROVE`, `REJECT`, `EXPORT`, `IMPORT`.
-
-Applications MAY define domain-specific action verbs. Action names
-SHOULD be stable across releases.
-
-### Field: `Outcome`
-
-| Property | Value                           |
-|----------|---------------------------------|
-| Type     | `enum`                          |
-| Required | MUST be set                     |
-| Values   | `SUCCESS`, `FAILURE`, `UNKNOWN` |
-
-The result of the auditable action:
-
-| Value     | Meaning                                                      |
-|-----------|--------------------------------------------------------------|
-| `SUCCESS` | The action completed successfully.                           |
-| `FAILURE` | The action was attempted but did not complete successfully.  |
-| `UNKNOWN` | The outcome could not be determined at the time of emission. |
-
-ISO 27001 Annex A items 5 and 6 require logging both successful and
-unsuccessful access attempts. Using `UNKNOWN` SHOULD be avoided except
-for fire-and-forget actions where acknowledgement is not possible.
-
-### Field: `TargetResource`
-
-| Property | Value         |
-|----------|---------------|
-| Type     | `AnyValue`    |
-| Required | SHOULD be set |
-
-The object upon which the action was performed. This MAY be:
-
-- A file path (string)
-- A database table or row identifier
-- A REST endpoint path
-- A structured object with type and identifier fields
-
-If the action was not directed at a specific resource (for example, a
-system startup event), this field MAY be omitted.
-
-Note: this field identifies the *target* of the auditable action and is
-distinct from the OTLP `Resource` envelope, which identifies the
-*emitting service or host*.
-
-### Field: `SourceIP`
-
-| Property | Value      |
-|----------|------------|
-| Type     | `string`   |
-| Required | MAY be set |
-
-The network address of the source of the auditable action. This field
-SHOULD be set for network-initiated actions (for example, a login
-attempt over HTTPS) and MAY be omitted for local or intra-process
-actions.
-
-The value SHOULD conform to the IPv4 dotted-decimal notation
-(`203.0.113.42`) or the IPv6 full notation (`2001:db8::1`). Port
-numbers MAY be appended using the `host:port` convention.
-
-### Field: `Body`
+#### Field: `Body`
 
 | Property | Value      |
 |----------|------------|
@@ -353,56 +197,209 @@ numbers MAY be appended using the `host:port` convention.
 
 Free-form additional information about the audit event. The value MAY
 be a string, a byte buffer, or a structured object. Applications SHOULD
-store information that does not fit naturally into the named fields here.
+store information that does not fit naturally into the named mandatory
+attributes here.
 
-The `Body` MUST NOT be used to store fields that duplicate the named
-mandatory fields (`Actor`, `Action`, `Outcome`, etc.).
+The `Body` MUST NOT duplicate information already present in the
+mandatory `Attributes`.
 
-### Field: `Attributes`
+#### Field: `Attributes`
 
-| Property | Value                   |
-|----------|-------------------------|
-| Type     | `map<string, AnyValue>` |
-| Required | MAY be set              |
+| Property | Value                                   |
+|----------|-----------------------------------------|
+| Type     | `map<string, AnyValue>`                 |
+| Required | MUST contain mandatory audit attributes |
 
-Arbitrary key-value pairs that provide additional context about the
-audit event. Applications SHOULD use the OpenTelemetry
+Key-value pairs that carry audit-specific context. The mandatory and
+optional attribute names are defined in
+[Audit Semantic Attributes](#audit-semantic-attributes) below.
+Applications MAY add additional attributes beyond those listed here
+using standard OTel
 [attribute naming conventions](../common/attribute-naming.md).
 
-Examples of useful attributes:
+Attribute keys MUST be unique within a record. If the same key is set
+multiple times, the last value MUST be used.
 
-- `session.id` – the authenticated session identifier
-- `request.id` – a correlation identifier for the originating request
-- `tenant.id` – the tenant in a multi-tenant system
-- `geolocation.country` – country of origin for network requests
-- `tls.version` – the TLS protocol version used
+### Audit Semantic Attributes
 
-Attribute keys MUST be unique within an `AuditRecord`. If the same key
-is set multiple times, the last value MUST be used.
+All audit-specific data that does not map to a standard `LogRecord`
+dedicated field is expressed as `Attributes` following the `audit.*`
+semantic convention namespace, or by reusing existing semantic
+convention attributes where a direct mapping exists.
 
-### Integrity Fields
+#### Mandatory Attributes
 
-The integrity fields enable a relying party to verify that an
-`AuditRecord` was not altered after emission. They are OPTIONAL but
-SHOULD be set in environments where tamper evidence is required by the
-applicable compliance framework.
+| Attribute name       | Type     | Required | Description                                    |
+|----------------------|----------|----------|------------------------------------------------|
+| `audit.record.id`    | `string` | MUST     | Unique stable identifier; UUID v4 recommended. |
+| `audit.actor.id`     | `string` | MUST     | Identity that performed the action.            |
+| `audit.actor.type`   | `string` | MUST     | `user`, `service`, or `system`.                |
+| `audit.action`       | `string` | MUST     | Verb describing what was done.                 |
+| `audit.outcome`      | `string` | MUST     | `success`, `failure`, or `unknown`.            |
 
-#### Field: `IntegrityValue`
+#### Attribute: `audit.record.id`
 
-| Property | Value      |
-|----------|------------|
-| Type     | `bytes`    |
-| Required | MAY be set |
+A caller-generated unique identifier for this `AuditRecord`. The value
+MUST be immutable once set and MUST remain stable across retries so
+that receivers can deduplicate records delivered more than once.
 
-A cryptographic integrity proof over the canonical serialization of the
-`AuditRecord`. `IntegrityValue` MUST cover all mandatory fields plus any
-`Attributes` and `Body` that are present at emission time.
+The caller SHOULD use a UUID v4 or an equivalent unpredictable unique
+identifier. The SDK MUST generate a UUID v4 if the caller does not
+provide one.
 
-The proof is either an asymmetric digital signature or a symmetric
-HMAC, as indicated by `audit.integrity.algorithm`. If
-`IntegrityValue` is set, `audit.integrity.algorithm` MUST be set as
-a `Resource` attribute (see
+`audit.record.id` is echoed back unchanged in the
+[`AuditReceipt`](#auditreceipt-definition), allowing the emitting
+application to correlate receipts with the original `emit` call.
+
+#### Actor Attributes
+
+Actor attributes identify the entity that performed the auditable
+action. Together, `audit.actor.id` and `audit.actor.type` provide the
+minimum identity context required by ISO 27001 Annex A item 1 (user
+IDs).
+
+**`audit.actor.id`**
+
+The identity of the entity that performed the action. This MAY be a
+user ID (string or integer cast to string), a service account name,
+or a fully qualified system identifier. If the actor identity cannot
+be determined (for example, an unauthenticated request),
+`audit.actor.id` MUST still be set to a value indicating the unknown
+state (e.g. `"anonymous"` or `"unknown"`).
+
+Applications where the actor is an authenticated end user MAY set
+`enduser.id` in addition to `audit.actor.id` when the values differ
+(for example, when `audit.actor.id` is a stable internal identifier
+and `enduser.id` is the authentication subject claim).
+
+**`audit.actor.type`**
+
+Classifies the kind of entity that performed the action:
+
+| Value     | Meaning                                                |
+|-----------|--------------------------------------------------------|
+| `user`    | A human user, identified by a user account.            |
+| `service` | An automated service, daemon, or service account.      |
+| `system`  | The operating system or a privileged system component. |
+
+Applications SHOULD choose the most appropriate value based on context.
+Use `service` for non-human actors that operate autonomously, and
+`user` for human-initiated actions, even if performed by an AI agent
+on behalf of a user.
+
+#### Attribute: `audit.action`
+
+A short verb or verb phrase that describes what the actor did.
+Applications SHOULD use uppercase verbs to distinguish action values
+from event names. Common values include:
+
+`LOGIN`, `LOGOUT`, `READ`, `WRITE`, `CREATE`, `UPDATE`, `DELETE`,
+`EXECUTE`, `APPROVE`, `REJECT`, `EXPORT`, `IMPORT`.
+
+Applications MAY define domain-specific action verbs. Action names
+SHOULD be stable across releases.
+
+#### Attribute: `audit.outcome`
+
+The result of the auditable action:
+
+| Value     | Meaning                                                      |
+|-----------|--------------------------------------------------------------|
+| `success` | The action completed successfully.                           |
+| `failure` | The action was attempted but did not complete successfully.  |
+| `unknown` | The outcome could not be determined at the time of emission. |
+
+ISO 27001 Annex A items 5 and 6 require logging both successful and
+unsuccessful access attempts. Using `unknown` SHOULD be avoided except
+for fire-and-forget actions where acknowledgement is not possible.
+
+#### Optional Attributes
+
+| Attribute name           | Type     | Required | Description                                           |
+|--------------------------|----------|----------|-------------------------------------------------------|
+| `audit.target.id`        | `string` | SHOULD   | Identifier of the resource acted upon.                |
+| `audit.target.type`      | `string` | SHOULD   | Type of the target resource.                          |
+| `audit.source.id`        | `string` | MAY      | Network address or identifier of the source.          |
+| `audit.source.type`      | `string` | MAY      | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`). |
+| `audit.integrity.value`  | `string` | MAY      | Base64-encoded cryptographic integrity proof.         |
+| `audit.sequence.number`  | `int`    | MAY      | Monotonic counter for hash-chain continuity.          |
+| `audit.prev.hash`        | `string` | MAY      | SHA-256 of the previous record in the stream.         |
+| `audit.schema.version`   | `string` | SHOULD   | Schema version of the audit payload.                  |
+
+#### Target Attributes
+
+**`audit.target.id`** SHOULD be set to an identifier for the object
+upon which the action was performed. Examples:
+
+- A file path (`/etc/passwd`)
+- A database table name (`users`)
+- A REST endpoint path (`/api/v1/orders/42`)
+- A cloud resource ARN or ID
+
+**`audit.target.type`** SHOULD classify the type of resource, for
+example `file`, `database.table`, `http.endpoint`, `k8s.configmap`.
+When applicable, values SHOULD align with existing OTel semantic
+convention resource types.
+
+If the action was not directed at a specific resource (for example, a
+system startup event), both attributes MAY be omitted.
+
+#### Source Attributes
+
+**`audit.source.id`** SHOULD be set for network-initiated actions (for
+example, a login attempt over HTTPS). The value SHOULD be an IPv4
+address in dotted-decimal notation (`203.0.113.42`) or a full IPv6
+address (`2001:db8::1`), or a hostname.
+
+**`audit.source.type`** SHOULD classify the address format. Recommended
+values are `ipv4`, `ipv6`, and `hostname`. When the source cannot be
+determined, both attributes MAY be omitted.
+
+#### Integrity Attributes
+
+**`audit.integrity.value`**
+
+A base64-encoded cryptographic integrity proof over the canonical
+serialisation of the `AuditRecord`. The proof is either an asymmetric
+digital signature or a symmetric HMAC, as indicated by the
+`audit.integrity.algorithm` `Resource` attribute (see
 [Integrity Resource Attributes](#integrity-resource-attributes)).
+
+When `audit.integrity.value` is set, `audit.integrity.algorithm` MUST
+be set as a `Resource` attribute.
+
+#### Ordering Attributes
+
+The optional ordering attributes enable hash-chain validation across a
+sequence of `AuditRecord`s. When populated, receivers can detect
+whether records have been deleted, inserted, or reordered by verifying
+that the sequence numbers are monotonically increasing and that each
+`audit.prev.hash` matches the `IntegrityHash` returned in the preceding
+record's `AuditReceipt`.
+
+Implementations that require strong tamper-evidence for ordered
+sequences SHOULD populate both `audit.sequence.number` and
+`audit.prev.hash`.
+
+**`audit.sequence.number`**
+
+A monotonically increasing integer counter, scoped to a single
+`AuditLogger` instance or a named audit stream. The first record in a
+stream SHOULD have `audit.sequence.number` equal to `1`. A gap between
+two consecutive values indicates that one or more records were lost or
+deleted and SHOULD trigger an alert.
+
+**`audit.prev.hash`**
+
+The `IntegrityHash` of the immediately preceding record in the same
+audit stream (as returned in the preceding `AuditReceipt`). The first
+record in a stream SHOULD set `audit.prev.hash` to the SHA-256 hash of
+the empty string
+(`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`).
+
+A `audit.prev.hash` that does not match the stored `IntegrityHash` of
+the previous record indicates tampering and MUST be treated as a
+critical integrity violation.
 
 ### Integrity Resource Attributes
 
@@ -413,12 +410,12 @@ in every record.
 
 #### Attribute: `audit.integrity.algorithm`
 
-| Property | Value                                  |
-|----------|----------------------------------------|
-| Type     | `string`                               |
-| Required | MUST be set if `IntegrityValue` is set |
+| Property | Value                                                    |
+|----------|----------------------------------------------------------|
+| Type     | `string`                                                 |
+| Required | MUST be set if `audit.integrity.value` is set on any record in the batch                                      |
 
-The algorithm used to compute `IntegrityValue` for all records
+The algorithm used to compute `audit.integrity.value` for all records
 produced by this resource.
 
 - For asymmetric signatures the value SHOULD be a registered JWA
@@ -433,7 +430,7 @@ produced by this resource.
 | Type     | `string`   |
 | Required | MAY be set |
 
-A reference to the signing key used to produce `IntegrityValue`.
+A reference to the signing key used to produce `audit.integrity.value`.
 MUST NOT be set when `audit.integrity.algorithm` denotes a symmetric
 MAC algorithm.
 
@@ -442,12 +439,12 @@ least self-contained:
 
 - **Full certificate** – base64 (standard encoding, no line wrapping)
   of the DER-encoded X.509 public-key certificate. Relying parties
-  can verify `IntegrityValue` without any out-of-band lookup.
-- **Fingerprint** – A hash string in the form `sha256:<hex>` or
+  can verify `audit.integrity.value` without any out-of-band lookup.
+- **Fingerprint** – a hash string in the form `sha256:<hex>` or
   `sha1:<hex>`, where `<hex>` is the colon-separated hex encoding of
   the DER certificate hash (e.g. `sha256:4A:6C:9F:…`). Requires
   matching against a locally trusted certificate.
-- **Key ID** – An opaque string identifier (e.g. a JWK `kid` claim
+- **Key ID** – an opaque string identifier (e.g. a JWK `kid` claim
   such as `key-2024-01`) agreed between emitter and relying party.
   Requires key retrieval via JWK Set URI or equivalent.
 - **SKI** – Subject Key Identifier in colon-separated hex
@@ -461,48 +458,6 @@ If `audit.integrity.certificate` is omitted and
 relying party MUST obtain the public key through a separately
 configured trust anchor.
 
-### Optional Ordering Fields
-
-The optional ordering fields enable hash-chain validation across a
-sequence of `AuditRecord`s. When populated, receivers can detect
-whether records have been deleted, inserted, or reordered by verifying
-that the sequence numbers are monotonically increasing and that each
-`PrevHash` matches the `IntegrityHash` returned in the preceding
-record's `AuditReceipt`.
-
-Implementations that require strong tamper-evidence for ordered
-sequences SHOULD populate both `SequenceNo` and `PrevHash`.
-
-#### Field: `SequenceNo`
-
-| Property | Value      |
-|----------|------------|
-| Type     | `uint64`   |
-| Required | MAY be set |
-
-A monotonically increasing counter, scoped to a single
-`AuditLogger` instance or a named audit stream. The first record in a
-stream SHOULD have `SequenceNo` equal to `1`.
-
-A gap between two consecutive `SequenceNo` values indicates that one
-or more records were lost or deleted and SHOULD trigger an alert.
-
-#### Field: `PrevHash`
-
-| Property | Value      |
-|----------|------------|
-| Type     | `string`   |
-| Required | MAY be set |
-
-The `IntegrityHash` of the immediately preceding record in the same
-audit stream (as returned in the preceding `AuditReceipt`). The first
-record in a stream SHOULD set `PrevHash` to the SHA-256 hash of the
-empty string (`e3b0c44298fc1c149afb…`).
-
-A `PrevHash` that does not match the stored `IntegrityHash` of the
-previous record indicates tampering and MUST be treated as a critical
-integrity violation.
-
 ## AuditReceipt Definition
 
 An `AuditReceipt` is returned by `AuditLogger.emit` once the audit
@@ -511,36 +466,28 @@ and enables integrity verification by the emitting application.
 
 | Field           | Type      | Required    | Description                                                  |
 |-----------------|-----------|-------------|--------------------------------------------------------------|
-| `RecordId`      | `string`  | MUST be set | Echoes the caller's `AuditRecord.RecordId`.                  |
+| `RecordId`      | `string`  | MUST be set | Echoes the caller's `audit.record.id` attribute.             |
 | `IntegrityHash` | `string`  | MUST be set | SHA-256 of the record as persisted by the sink.              |
 | `SinkTimestamp` | `fixed64` | MUST be set | Nanoseconds since UNIX epoch when the sink wrote the record. |
 
 ### Field: `RecordId`
 
-The `RecordId` from the corresponding `AuditRecord` as provided by the
-caller. The sink MUST echo this value unchanged. Callers use it to
-correlate the receipt with the original `emit` call, and to confirm
-that the correct record was persisted.
-
-If the sink generates its own internal identifier it MUST still return
-the caller's `RecordId` here. The internal identifier MAY be conveyed
-as a separate field in a protocol extension.
+The value of the `audit.record.id` attribute from the corresponding
+`AuditRecord` as provided by the caller. The sink MUST echo this value
+unchanged. Callers use it to correlate the receipt with the original
+`emit` call and to confirm that the correct record was persisted.
 
 ### Field: `IntegrityHash`
 
-The SHA-256 hash of the canonical serialization of the `AuditRecord`
-as it was written to persistent storage, computed by the sink. The hash
-is returned to the emitting application so that it can verify that the
-record was not altered between emission and persistence.
-
-The `IntegrityHash` is computed by the **sink**, not by the SDK, so it
-reflects the record as actually stored – not merely as transmitted.
+The SHA-256 hash of the canonical serialisation of the `AuditRecord`
+as it was written to persistent storage, computed by the sink. Returned
+to the emitting application so that it can verify that the record was
+not altered between emission and persistence.
 
 The emitting application SHOULD compute the same hash locally
 immediately after calling `emit` and compare it to the received
 `IntegrityHash`. A mismatch indicates that the record was altered in
-transit or by the sink and SHOULD trigger an alert (for example, log an
-error or raise an incident).
+transit or by the sink and SHOULD trigger an alert.
 
 ### Field: `SinkTimestamp`
 
@@ -551,25 +498,40 @@ abnormally long delivery times.
 
 ## Example AuditRecords
 
+The examples below show the `LogRecord` representation of an
+`AuditRecord`. Resource attributes are shown separately.
+
 ### Successful user login
 
 ```json
 {
-  "RecordId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "Timestamp": 1714041600000000000,
   "ObservedTimestamp": 1714041600001000000,
-  "SchemaVersion": "1.0.0",
   "EventName": "user.login.success",
-  "Actor": "u8472",
-  "ActorType": "USER",
-  "Action": "LOGIN",
-  "Outcome": "SUCCESS",
-  "TargetResource": "/api/auth/session",
-  "SourceIP": "203.0.113.42",
+  "Body": null,
   "Attributes": {
+    "audit.record.id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "audit.actor.id": "u8472",
+    "audit.actor.type": "user",
+    "audit.action": "LOGIN",
+    "audit.outcome": "success",
+    "audit.target.id": "/api/auth/session",
+    "audit.target.type": "http.endpoint",
+    "audit.source.id": "203.0.113.42",
+    "audit.source.type": "ipv4",
+    "audit.schema.version": "1.0.0",
     "session.id": "sess-abc123",
     "tls.version": "TLSv1.3"
   }
+}
+```
+
+Resource attributes:
+
+```json
+{
+  "service.name": "auth-service",
+  "service.version": "2.3.1"
 }
 ```
 
@@ -577,22 +539,19 @@ abnormally long delivery times.
 
 ```json
 {
-  "RecordId": "f7e8d9c0-b1a2-3456-cdef-0987654321ab",
   "Timestamp": 1714041700000000000,
   "ObservedTimestamp": 1714041700002000000,
-  "SchemaVersion": "1.0.0",
   "EventName": "config.change",
-  "Actor": "svc-deployer",
-  "ActorType": "SERVICE",
-  "Action": "UPDATE",
-  "Outcome": "FAILURE",
-  "TargetResource": {
-    "type": "kubernetes/configmap",
-    "namespace": "production",
-    "name": "app-secrets"
-  },
   "Body": "Authorization denied: missing role 'config-writer'",
   "Attributes": {
+    "audit.record.id": "f7e8d9c0-b1a2-3456-cdef-0987654321ab",
+    "audit.actor.id": "svc-deployer",
+    "audit.actor.type": "service",
+    "audit.action": "UPDATE",
+    "audit.outcome": "failure",
+    "audit.target.id": "production/app-secrets",
+    "audit.target.type": "k8s.configmap",
+    "audit.schema.version": "1.0.0",
     "request.id": "req-xyz789",
     "k8s.namespace": "production"
   }

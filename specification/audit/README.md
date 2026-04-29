@@ -144,8 +144,8 @@ payload carrier. The following OTLP envelope layers apply:
 | OTLP layer             | Role in audit logging                                  |
 |------------------------|--------------------------------------------------------|
 | `Resource`             | Emitting service / host; integrity attrs on Resource.  |
-| `LogRecord` (body)     | Carries the `AuditRecord` payload.                     |
-| `Attributes`           | Key-value context (actor, outcome, …) – reused as-is.  |
+| `LogRecord`            | Carries AuditRecord via dedicated fields + Attributes. |
+| `Attributes`           | Mandatory and optional `audit.*` semantic attributes.  |
 | `InstrumentationScope` | **Not applicable.** MUST be left empty by exporters.   |
 
 ## Specifications
