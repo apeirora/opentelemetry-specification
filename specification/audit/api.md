@@ -119,53 +119,46 @@ returning an `AuditReceipt`.
 
 The API MUST accept the following parameters:
 
-- [`RecordId`](./data-model.md#field-recordid) (required): a
-  caller-generated unique identifier for this record. If the caller
-  does not provide one the SDK MUST generate a UUID v4. The value
-  MUST be stable across retries of the same event.
-- [`Timestamp`](./data-model.md#field-timestamp) (required): the time
-  at which the auditable action occurred.
-- [`EventName`](./data-model.md#field-eventname) (required): the
+- [`Timestamp`](./data-model.md#logrecord-field-usage) (required): the
+  time at which the auditable action occurred.
+- [`EventName`](./data-model.md#logrecord-field-usage) (required): the
   semantic name of the audit event.
-- [`Actor`](./data-model.md#field-actor) (required): the identity that
-  performed the action.
-- [`ActorType`](./data-model.md#field-actortype) (required): the type
-  of the actor (`USER`, `SERVICE`, or `SYSTEM`).
-- [`Action`](./data-model.md#field-action) (required): the verb
-  describing what was done.
-- [`Outcome`](./data-model.md#field-outcome) (required): the result of
-  the action (`SUCCESS`, `FAILURE`, or `UNKNOWN`).
+- [`Attributes`](./data-model.md#audit-semantic-attributes) (required):
+  a map of key-value pairs that carries all audit-specific data.
+  The following attribute keys MUST be present and non-empty:
+
+  | Attribute key       | Type     | Description                          |
+  |---------------------|----------|--------------------------------------|
+  | `audit.actor.id`    | `string` | Identity that performed the action.  |
+  | `audit.actor.type`  | `string` | `user`, `service`, or `system`.      |
+  | `audit.action`      | `string` | Verb describing what was done.       |
+  | `audit.outcome`     | `string` | `success`, `failure`, or `unknown`.  |
+
+  The attribute key `audit.record.id` is also required in every
+  persisted record. If the caller omits it, the SDK MUST generate a
+  UUID v4 and inject it into `Attributes` before any further
+  processing. The value MUST be stable across retries of the same
+  event.
 
 The API MUST accept the following optional parameters:
 
-- [`ObservedTimestamp`](./data-model.md#field-observedtimestamp)
-  (optional): if not set, the SDK MUST set this to the current time.
-- [`SchemaVersion`](./data-model.md#field-schemaversion) (optional):
-  the schema version of the audit payload. SHOULD be set.
-- [`TargetResource`](./data-model.md#field-targetresource) (optional):
-  the object upon which the action was performed.
-- [`SourceIP`](./data-model.md#field-sourceip) (optional): the source
-  network address.
-- [`Body`](./data-model.md#field-body) (optional): free-form additional
-  event details.
-- [`Attributes`](./data-model.md#field-attributes) (optional):
-  arbitrary key-value context pairs.
-- [`IntegrityValue`](./data-model.md#field-integrityvalue) (optional):
-  cryptographic integrity proof over the record – either an asymmetric
-  digital signature or a symmetric HMAC. The signing algorithm is
-  configured via the `audit.integrity.algorithm` `Resource` attribute
-  on the `AuditProvider`; the key reference via
-  `audit.integrity.certificate`.
-- [`SequenceNo`](./data-model.md#field-sequenceno) (optional):
-  monotonic counter for hash-chain continuity.
-- [`PrevHash`](./data-model.md#field-prevhash) (optional): SHA-256 of
-  the preceding record in the audit stream.
+- [`ObservedTimestamp`](./data-model.md#logrecord-field-usage)
+  (optional): if not provided, the SDK MUST set it to the current time.
+- [`Body`](./data-model.md#logrecord-field-usage) (optional): free-form
+  or structured event details.
+
+Additional optional attributes MAY be provided in `Attributes`. See
+the [Audit Record Data Model](./data-model.md#audit-semantic-attributes)
+for the full list, which includes `audit.target.id`, `audit.target.type`,
+`audit.source.id`, `audit.source.type`, `audit.integrity.value`,
+`audit.sequence.number`,
+`audit.prev.hash`, and `audit.schema.version`.
 
 **Return value**: The API MUST return an
-[`AuditReceipt`](./data-model.md#auditreceipt-definition) when the audit sink
-acknowledges that the record has been persisted. The receipt echoes the
-caller's `RecordId` and contains an `IntegrityHash` and a
-`SinkTimestamp`.
+[`AuditReceipt`](./data-model.md#auditreceipt-definition) when the
+audit sink acknowledges that the record has been persisted. The receipt
+echoes the caller's `audit.record.id` and contains an `IntegrityHash`
+and a `SinkTimestamp`.
 
 **Delivery semantics**: `emit` is synchronous by default. It MUST block
 the calling thread until the exporter receives a successful
