@@ -12,14 +12,15 @@ weight: 1
 
 <!-- toc -->
 
-- [AuditProvider](#auditprovider)
-  * [AuditProvider operations](#auditprovider-operations)
-    + [Get an AuditLogger](#get-an-auditlogger)
-- [AuditLogger](#auditlogger)
-  * [Emit an AuditRecord](#emit-an-auditrecord)
-- [Optional and required parameters](#optional-and-required-parameters)
-- [Concurrency requirements](#concurrency-requirements)
-- [References](#references)
+- [Audit Logging API](#audit-logging-api)
+  - [AuditProvider](#auditprovider)
+    - [AuditProvider operations](#auditprovider-operations)
+      - [Get an AuditLogger](#get-an-auditlogger)
+  - [AuditLogger](#auditlogger)
+    - [Emit an AuditRecord](#emit-an-auditrecord)
+  - [Optional and required parameters](#optional-and-required-parameters)
+  - [Concurrency requirements](#concurrency-requirements)
+  - [References](#references)
 <!-- tocstop -->
 
 </details>
@@ -127,12 +128,12 @@ The API MUST accept the following parameters:
   a map of key-value pairs that carries all audit-specific data.
   The following attribute keys MUST be present and non-empty:
 
-  | Attribute key       | Type     | Description                          |
-  |---------------------|----------|--------------------------------------|
-  | `audit.actor.id`    | `string` | Identity that performed the action.  |
-  | `audit.actor.type`  | `string` | `user`, `service`, or `system`.      |
-  | `audit.action`      | `string` | Verb describing what was done.       |
-  | `audit.outcome`     | `string` | `success`, `failure`, or `unknown`.  |
+  | Attribute key      | Type     | Description                         |
+  |--------------------|----------|-------------------------------------|
+  | `audit.actor.id`   | `string` | Identity that performed the action. |
+  | `audit.actor.type` | `string` | `user`, `service`, or `system`.     |
+  | `audit.action`     | `string` | Verb describing what was done.      |
+  | `audit.outcome`    | `string` | `success`, `failure`, or `unknown`. |
 
   The attribute key `audit.record.id` is also required in every
   persisted record. If the caller omits it, the SDK MUST generate a

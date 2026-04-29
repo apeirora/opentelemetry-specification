@@ -219,8 +219,8 @@ The three OTLP envelope layers that **do** apply to audit logging are:
 The `Resource` MUST carry the following attributes whenever any
 record in the batch includes an `audit.integrity.value`:
 
-| Attribute                     | Type     | Description                           |
-|-------------------------------|----------|---------------------------------------|
+| Attribute                     | Type     | Description                                                                                                 |
+|-------------------------------|----------|-------------------------------------------------------------------------------------------------------------|
 | `audit.integrity.algorithm`   | `string` | Algorithm used to compute `IntegrityValue` (JWA identifier for signatures, IANA MAC identifier for HMACs).  |
 | `audit.integrity.certificate` | `string` | Key reference: full DER cert (base64), fingerprint, Key ID, SKI, or Issuer+Serial. Not for HMAC algorithms. |
 
