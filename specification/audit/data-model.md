@@ -39,6 +39,9 @@ weight: 2
       - [Attribute: `audit.integrity.algorithm`](#attribute-auditintegrityalgorithm)
       - [Attribute: `audit.integrity.certificate`](#attribute-auditintegritycertificate)
   - [AuditReceipt Definition](#auditreceipt-definition)
+    - [Field: `RecordId`](#field-recordid)
+    - [Field: `IntegrityHash`](#field-integrityhash)
+    - [Field: `SinkTimestamp`](#field-sinktimestamp)
   - [Example AuditRecords](#example-auditrecords)
     - [Successful user login](#successful-user-login)
     - [Failed privileged configuration change](#failed-privileged-configuration-change)
@@ -95,11 +98,11 @@ serves a structurally similar purpose.
 
 The following OTLP envelope layers apply to audit records:
 
-| OTLP layer             | Role in audit logging                                   |
-|------------------------|---------------------------------------------------------|
-| `Resource`             | Emitting service / host; integrity attrs (see below).   |
-| `LogRecord`            | Carries the `AuditRecord` via dedicated fields and `Attributes`.                                           |
-| `InstrumentationScope` | **Not applicable.** MUST be left empty by exporters.    |
+| OTLP layer             | Role in audit logging                                            |
+|------------------------|------------------------------------------------------------------|
+| `Resource`             | Emitting service / host; integrity attrs (see below).            |
+| `LogRecord`            | Carries the `AuditRecord` via dedicated fields and `Attributes`. |
+| `InstrumentationScope` | **Not applicable.** MUST be left empty by exporters.             |
 
 The `Resource` also carries `audit.integrity.algorithm` and
 `audit.integrity.certificate` — see
@@ -115,19 +118,19 @@ data.
 
 ### LogRecord Field Usage
 
-| LogRecord Field        | Audit Usage                                   | Required                       |
-|------------------------|-----------------------------------------------|--------------------------------|
-| `Timestamp`            | Time the auditable action occurred            | MUST be set                    |
-| `ObservedTimestamp`    | Time the SDK observed the event               | MUST be set                    |
-| `EventName`            | Semantic name of the audit event type         | MUST be set; MUST NOT be empty |
-| `Body`                 | Free-form or structured event details         | MAY be set                     |
-| `Attributes`           | Audit semantic attributes (see below)         | MUST contain mandatory attrs   |
-| `Resource`             | Emitting service / host metadata              | MUST be set                    |
-| `TraceId`              | Correlation to an active trace, if any        | MAY be set                     |
-| `SpanId`               | Correlation to an active span, if any         | MAY be set                     |
-| `SeverityNumber`       | Not applicable for audit records              | SHOULD NOT be set                |
-| `SeverityText`         | Not applicable for audit records              | SHOULD NOT be set                |
-| `InstrumentationScope` | Not applicable for audit records              | MUST be left empty             |
+| LogRecord Field        | Audit Usage                            | Required                       |
+|------------------------|----------------------------------------|--------------------------------|
+| `Timestamp`            | Time the auditable action occurred     | MUST be set                    |
+| `ObservedTimestamp`    | Time the SDK observed the event        | MUST be set                    |
+| `EventName`            | Semantic name of the audit event type  | MUST be set; MUST NOT be empty |
+| `Body`                 | Free-form or structured event details  | MAY be set                     |
+| `Attributes`           | Audit semantic attributes (see below)  | MUST contain mandatory attrs   |
+| `Resource`             | Emitting service / host metadata       | MUST be set                    |
+| `TraceId`              | Correlation to an active trace, if any | MAY be set                     |
+| `SpanId`               | Correlation to an active span, if any  | MAY be set                     |
+| `SeverityNumber`       | Not applicable for audit records       | SHOULD NOT be set              |
+| `SeverityText`         | Not applicable for audit records       | SHOULD NOT be set              |
+| `InstrumentationScope` | Not applicable for audit records       | MUST be left empty             |
 
 #### Field: `Timestamp`
 
@@ -229,13 +232,13 @@ convention attributes where a direct mapping exists.
 
 #### Mandatory Attributes
 
-| Attribute name       | Type     | Required | Description                                    |
-|----------------------|----------|----------|------------------------------------------------|
-| `audit.record.id`    | `string` | MUST     | Unique stable identifier; UUID v4 recommended. |
-| `audit.actor.id`     | `string` | MUST     | Identity that performed the action.            |
-| `audit.actor.type`   | `string` | MUST     | `user`, `service`, or `system`.                |
-| `audit.action`       | `string` | MUST     | Verb describing what was done.                 |
-| `audit.outcome`      | `string` | MUST     | `success`, `failure`, or `unknown`.            |
+| Attribute name     | Type     | Required | Description                                    |
+|--------------------|----------|----------|------------------------------------------------|
+| `audit.record.id`  | `string` | MUST     | Unique stable identifier; UUID v4 recommended. |
+| `audit.actor.id`   | `string` | MUST     | Identity that performed the action.            |
+| `audit.actor.type` | `string` | MUST     | `user`, `service`, or `system`.                |
+| `audit.action`     | `string` | MUST     | Verb describing what was done.                 |
+| `audit.outcome`    | `string` | MUST     | `success`, `failure`, or `unknown`.            |
 
 #### Attribute: `audit.record.id`
 
@@ -315,16 +318,16 @@ for fire-and-forget actions where acknowledgement is not possible.
 
 #### Optional Attributes
 
-| Attribute name           | Type     | Required | Description                                           |
-|--------------------------|----------|----------|-------------------------------------------------------|
-| `audit.target.id`        | `string` | SHOULD   | Identifier of the resource acted upon.                |
-| `audit.target.type`      | `string` | SHOULD   | Type of the target resource.                          |
-| `audit.source.id`        | `string` | MAY      | Network address or identifier of the source.          |
-| `audit.source.type`      | `string` | MAY      | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`). |
-| `audit.integrity.value`  | `string` | MAY      | Base64-encoded cryptographic integrity proof.         |
-| `audit.sequence.number`  | `int`    | MAY      | Monotonic counter for hash-chain continuity.          |
-| `audit.prev.hash`        | `string` | MAY      | SHA-256 of the previous record in the stream.         |
-| `audit.schema.version`   | `string` | SHOULD   | Schema version of the audit payload.                  |
+| Attribute name          | Type     | Required | Description                                           |
+|-------------------------|----------|----------|-------------------------------------------------------|
+| `audit.target.id`       | `string` | SHOULD   | Identifier of the resource acted upon.                |
+| `audit.target.type`     | `string` | SHOULD   | Type of the target resource.                          |
+| `audit.source.id`       | `string` | MAY      | Network address or identifier of the source.          |
+| `audit.source.type`     | `string` | MAY      | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`). |
+| `audit.integrity.value` | `string` | MAY      | Base64-encoded cryptographic integrity proof.         |
+| `audit.sequence.number` | `int`    | MAY      | Monotonic counter for hash-chain continuity.          |
+| `audit.prev.hash`       | `string` | MAY      | SHA-256 of the previous record in the stream.         |
+| `audit.schema.version`  | `string` | SHOULD   | Schema version of the audit payload.                  |
 
 #### Target Attributes
 
@@ -360,7 +363,7 @@ determined, both attributes MAY be omitted.
 **`audit.integrity.value`**
 
 A base64-encoded cryptographic integrity proof over the canonical
-serialisation of the `AuditRecord`. The proof is either an asymmetric
+serialization of the `AuditRecord`. The proof is either an asymmetric
 digital signature or a symmetric HMAC, as indicated by the
 `audit.integrity.algorithm` `Resource` attribute (see
 [Integrity Resource Attributes](#integrity-resource-attributes)).
@@ -410,10 +413,10 @@ in every record.
 
 #### Attribute: `audit.integrity.algorithm`
 
-| Property | Value                                                    |
-|----------|----------------------------------------------------------|
-| Type     | `string`                                                 |
-| Required | MUST be set if `audit.integrity.value` is set on any record in the batch                                      |
+| Property | Value                                                                    |
+|----------|--------------------------------------------------------------------------|
+| Type     | `string`                                                                 |
+| Required | MUST be set if `audit.integrity.value` is set on any record in the batch |
 
 The algorithm used to compute `audit.integrity.value` for all records
 produced by this resource.
@@ -479,7 +482,7 @@ unchanged. Callers use it to correlate the receipt with the original
 
 ### Field: `IntegrityHash`
 
-The SHA-256 hash of the canonical serialisation of the `AuditRecord`
+The SHA-256 hash of the canonical serialization of the `AuditRecord`
 as it was written to persistent storage, computed by the sink. Returned
 to the emitting application so that it can verify that the record was
 not altered between emission and persistence.
