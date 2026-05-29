@@ -61,11 +61,6 @@ The `AuditProvider` is expected to be accessed from a central place.
 The API SHOULD provide a way to set and access a global default
 `AuditProvider`.
 
-The API MUST provide a No-op `AuditProvider` implementation that is
-used when no SDK is installed. The No-op provider MUST return a No-op
-`AuditLogger` whose `emit` method completes without error and returns a
-No-op `AuditReceipt`.
-
 ### AuditProvider operations
 
 The `AuditProvider` MUST provide the following function:
