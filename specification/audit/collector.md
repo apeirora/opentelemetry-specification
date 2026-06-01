@@ -200,6 +200,15 @@ When `audit.integrity.value` is present the collector SHOULD verify
 it against the algorithm declared in the `Resource` attribute
 `audit.integrity.algorithm` and the key material referenced by
 `audit.integrity.certificate` in the collector's trust policy.
+Before verifying, the collector MUST serialize the `AuditRecord` to
+JSON and canonicalize it using
+[RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785]; the
+`audit.integrity.*` attributes MUST be excluded from the canonical
+form — they carry the proof itself and MUST NOT be part of the
+verified payload. The canonical byte sequence of the remaining
+record is the input to the verification operation.
+
+[rfc8785]: https://www.rfc-editor.org/rfc/rfc8785
 
 The collector MAY defer verification for low-latency ingest (returning
 `accepted_pending_verify`) but MUST complete verification before

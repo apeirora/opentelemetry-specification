@@ -348,10 +348,18 @@ The signing processor computes an `audit.integrity.value` attribute
 for each `AuditRecord` to provide tamper-evidence. The value is a
 base64-encoded asymmetric digital signature or symmetric HMAC, as
 determined by the `audit.integrity.algorithm` `Resource` attribute
-configured on the `AuditProvider`. It MUST be implemented as a
+configured on the `AuditProvider`. Before signing, the processor
+MUST serialize the `AuditRecord` to JSON and canonicalize it using
+[RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785]; the
+`audit.integrity.*` attributes MUST be excluded from the canonical
+form — they carry the proof itself and MUST NOT be part of the
+signed payload. The canonical byte sequence of the remaining record
+is the input to the signing or HMAC operation. It MUST be implemented as a
 separate processor that can be added to the pipeline in addition to
 the simple processor, to allow flexibility in the choice of signing
 algorithm and key management strategy.
+
+[rfc8785]: https://www.rfc-editor.org/rfc/rfc8785
 
 ## AuditRecordExporter
 
