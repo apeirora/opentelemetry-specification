@@ -368,6 +368,18 @@ digital signature or a symmetric HMAC, as indicated by the
 `audit.integrity.algorithm` `Resource` attribute (see
 [Integrity Resource Attributes](#integrity-resource-attributes)).
 
+Before signing or verifying, the `AuditRecord` MUST be serialized to
+JSON and then canonicalized using
+[RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785]. The
+`audit.integrity.*` attributes MUST be excluded from the canonical
+form before signing — they carry the proof itself and MUST NOT be
+part of the signed payload. The canonical byte sequence of the
+remaining record is the input to the signing or HMAC operation.
+Implementations MUST NOT use any other serialization or
+canonicalization method for this purpose.
+
+[rfc8785]: https://www.rfc-editor.org/rfc/rfc8785
+
 When `audit.integrity.value` is set, `audit.integrity.algorithm` MUST
 be set as a `Resource` attribute.
 
@@ -444,14 +456,16 @@ least self-contained:
   of the DER-encoded X.509 public-key certificate. Relying parties
   can verify `audit.integrity.value` without any out-of-band lookup.
 - **Fingerprint** – a hash string in the form `sha256:<hex>` or
-  `sha1:<hex>`, where `<hex>` is the colon-separated hex encoding of
-  the DER certificate hash (e.g. `sha256:4A:6C:9F:…`). Requires
+  `sha1:<hex>`, where `<hex>` is the lowercase hex encoding of
+  the DER certificate hash **without** any separators
+  (e.g. `sha256:3a5f9c2e117b4d8f…`). Colons or other separator
+  characters within the hex portion are NOT permitted. Requires
   matching against a locally trusted certificate.
 - **Key ID** – an opaque string identifier (e.g. a JWK `kid` claim
   such as `key-2024-01`) agreed between emitter and relying party.
   Requires key retrieval via JWK Set URI or equivalent.
-- **SKI** – Subject Key Identifier in colon-separated hex
-  (e.g. `3C:F0:…`). Requires a PKI lookup.
+- **SKI** – Subject Key Identifier as lowercase hex without separators
+  (e.g. `3cf012ab…`). Requires a PKI lookup.
 - **Issuer + Serial** – Issuer Distinguished Name and serial number
   separated by a slash (e.g. `CN=MyCA,O=Acme Corp/12345`). Requires
   a PKI lookup.
@@ -483,9 +497,11 @@ unchanged. Callers use it to correlate the receipt with the original
 ### Field: `IntegrityHash`
 
 The SHA-256 hash of the canonical serialization of the `AuditRecord`
-as it was written to persistent storage, computed by the sink. Returned
-to the emitting application so that it can verify that the record was
-not altered between emission and persistence.
+as it was written to persistent storage, computed by the sink. The
+record MUST be serialized to JSON and canonicalized using
+[RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785] before
+hashing. Returned to the emitting application so that it can verify
+that the record was not altered between emission and persistence.
 
 The emitting application SHOULD compute the same hash locally
 immediately after calling `emit` and compare it to the received
