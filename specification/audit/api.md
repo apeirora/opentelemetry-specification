@@ -148,7 +148,7 @@ the [Audit Record Data Model](./data-model.md#audit-semantic-attributes)
 for the full list, which includes `audit.target.id`, `audit.target.type`,
 `audit.source.id`, `audit.source.type`, `audit.integrity.value`,
 `audit.sequence.number`,
-`audit.prev.hash`, and `audit.schema.version`.
+`audit.sequence.prev_hash`, and `audit.schema.version`.
 
 **Return value**: The API MUST return an
 [`AuditReceipt`](./data-model.md#auditreceipt-definition) when the
