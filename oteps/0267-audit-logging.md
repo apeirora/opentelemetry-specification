@@ -154,7 +154,7 @@ convention attributes where a direct mapping exists.
 | `audit.source.type`     | `string` | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`). |
 | `audit.integrity.value` | `string` | Base64-encoded signature or HMAC.                     |
 | `audit.sequence.number` | `int`    | Monotonic counter for hash-chain continuity.          |
-| `audit.prev.hash`       | `string` | SHA-256 of the preceding record.                      |
+| `audit.sequence.prev_hash`       | `string` | SHA-256 of the preceding record.                      |
 | `audit.schema.version`  | `string` | Schema version (e.g. `1.0.0`).                        |
 
 The `Resource` carries `audit.integrity.algorithm` and

@@ -548,7 +548,7 @@ The Tier-2 collector SHOULD:
   algorithm declared in the `Resource` attribute
   `audit.integrity.algorithm` and the key material referenced by
   `audit.integrity.certificate`.
-- Validate `audit.sequence.number` continuity and `audit.prev.hash`
+- Validate `audit.sequence.number` continuity and `audit.sequence.prev_hash`
   chain integrity when these optional attributes are present.
 - Deliver each record to every configured required sink before
   returning a success response to the SDK exporter.
