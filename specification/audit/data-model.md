@@ -326,7 +326,7 @@ for fire-and-forget actions where acknowledgement is not possible.
 | `audit.source.type`     | `string` | MAY      | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`). |
 | `audit.integrity.value` | `string` | MAY      | Base64-encoded cryptographic integrity proof.         |
 | `audit.sequence.number` | `int`    | MAY      | Monotonic counter for hash-chain continuity.          |
-| `audit.prev.hash`       | `string` | MAY      | SHA-256 of the previous record in the stream.         |
+| `audit.sequence.prev_hash`       | `string` | MAY      | SHA-256 of the previous record in the stream.         |
 | `audit.schema.version`  | `string` | SHOULD   | Schema version of the audit payload.                  |
 
 #### Target Attributes
@@ -389,12 +389,12 @@ The optional ordering attributes enable hash-chain validation across a
 sequence of `AuditRecord`s. When populated, receivers can detect
 whether records have been deleted, inserted, or reordered by verifying
 that the sequence numbers are monotonically increasing and that each
-`audit.prev.hash` matches the `IntegrityHash` returned in the preceding
+`audit.sequence.prev_hash` matches the `IntegrityHash` returned in the preceding
 record's `AuditReceipt`.
 
 Implementations that require strong tamper-evidence for ordered
 sequences SHOULD populate both `audit.sequence.number` and
-`audit.prev.hash`.
+`audit.sequence.prev_hash`.
 
 **`audit.sequence.number`**
 
@@ -404,15 +404,15 @@ stream SHOULD have `audit.sequence.number` equal to `1`. A gap between
 two consecutive values indicates that one or more records were lost or
 deleted and SHOULD trigger an alert.
 
-**`audit.prev.hash`**
+**`audit.sequence.prev_hash`**
 
 The `IntegrityHash` of the immediately preceding record in the same
 audit stream (as returned in the preceding `AuditReceipt`). The first
-record in a stream SHOULD set `audit.prev.hash` to the SHA-256 hash of
+record in a stream SHOULD set `audit.sequence.prev_hash` to the SHA-256 hash of
 the empty string
 (`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`).
 
-A `audit.prev.hash` that does not match the stored `IntegrityHash` of
+A `audit.sequence.prev_hash` that does not match the stored `IntegrityHash` of
 the previous record indicates tampering and MUST be treated as a
 critical integrity violation.
 
