@@ -60,6 +60,9 @@ release.
 
 ### SDK Configuration
 
+- Add link to declarative config IdGenerator type
+  ([#5133](https://github.com/open-telemetry/opentelemetry-specification/pull/5133))
+
 ### Supplementary Guidelines
 
 ### OTEPs
@@ -160,6 +163,8 @@ release.
 
 - Define merge algorithm.
   ([4768](https://github.com/open-telemetry/opentelemetry-specification/pull/4768))
+- Add specification for communicating entity information as structured log events.
+  ([#4836](https://github.com/open-telemetry/opentelemetry-specification/pull/4836))
 
 ### Compatibility
 
