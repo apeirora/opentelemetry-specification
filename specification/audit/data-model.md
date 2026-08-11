@@ -428,7 +428,7 @@ sequences SHOULD populate both `audit.sequence.number` and
 **`audit.sequence.number`**
 
 A monotonically increasing integer counter, scoped to the audit stream
-identified by [`audit.sequence.stream_id`](#auditsequencestream_id). The first record in a
+identified by `audit.sequence.stream_id`. The first record in a
 stream SHOULD have `audit.sequence.number` equal to `1`. A gap between
 two consecutive values indicates that one or more records were lost or
 deleted and SHOULD trigger an alert.
