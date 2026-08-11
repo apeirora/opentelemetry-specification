@@ -89,6 +89,12 @@ The `AuditProvider` MUST implement the
 `name` and optional `version` / `schema_url` parameters are stored
 internally on the created `AuditLogger` for diagnostic purposes.
 
+The SDK MUST generate a `stream_id` (UUID v4) for each `AuditLogger`
+instance at creation time. This value MUST be used as `audit.sequence.stream_id`
+on every record emitted by that logger instance. The `stream_id` MUST
+remain stable for the lifetime of the `AuditLogger` instance and MUST
+NOT be reused across instances.
+
 If an invalid `name` (null or empty string) is provided, a working
 `AuditLogger` MUST be returned rather than null or an exception. The
 `name` SHOULD retain the invalid value and the SDK SHOULD emit a
@@ -165,21 +171,24 @@ When `emit` is called, the SDK MUST:
 1. If `Attributes` does not contain `audit.record.id`, generate a
    UUID v4 and inject it into `Attributes` before any further
    processing.
-2. Set `ObservedTimestamp` to the current time if the caller did not
+2. If `audit.sequence.number` or `audit.sequence.prev_hash` is present in
+   `Attributes`, the SDK MUST inject the logger's `stream_id` as `audit.sequence.stream_id`
+   unless the caller has already set `audit.sequence.stream_id` explicitly.
+3. Set `ObservedTimestamp` to the current time if the caller did not
    provide it.
-3. Validate that the required LogRecord fields (`Timestamp`,
+4. Validate that the required LogRecord fields (`Timestamp`,
    `EventName`) and the mandatory attributes (`audit.actor.id`,
    `audit.actor.type`, `audit.action`, `audit.outcome`) are present
    and non-empty. If any required field or attribute is missing,
    `emit` MUST surface a hard error to the caller and MUST NOT
    silently drop the record.
-4. Enqueue the `AuditRecord` in the [AuditRecord Queue](#auditrecord-queue).
-5. Pass the record through all registered
+5. Enqueue the `AuditRecord` in the [AuditRecord Queue](#auditrecord-queue).
+6. Pass the record through all registered
    `AuditRecordProcessor` instances via
    [`OnEmit`](#onemit).
-6. Block until the exporter returns a successful acknowledgement from
+7. Block until the exporter returns a successful acknowledgement from
    the audit sink.
-7. Return the [`AuditReceipt`](./data-model.md#auditreceipt-definition) provided
+8. Return the [`AuditReceipt`](./data-model.md#auditreceipt-definition) provided
    by the sink.
 
 If the synchronous `emit` cannot obtain an acknowledgement within the
@@ -354,7 +363,12 @@ MUST serialize the `AuditRecord` to JSON and canonicalize it using
 `audit.integrity.*` attributes MUST be excluded from the canonical
 form — they carry the proof itself and MUST NOT be part of the
 signed payload. The canonical byte sequence of the remaining record
-is the input to the signing or HMAC operation. It MUST be implemented as a
+is the input to the signing or HMAC operation. The signing processor
+MUST set `audit.integrity.signer` to `producer` on each record it signs,
+immediately after writing `audit.integrity.value`. Setting this value
+explicitly is RECOMMENDED even though `producer` is the default when the
+attribute is absent, so that consumers do not need to apply defaulting
+logic. It MUST be implemented as a
 separate processor that can be added to the pipeline in addition to
 the simple processor, to allow flexibility in the choice of signing
 algorithm and key management strategy.
