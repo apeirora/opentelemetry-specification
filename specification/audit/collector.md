@@ -29,6 +29,7 @@ weight: 4
   - [Verification and Sink Delivery](#verification-and-sink-delivery)
     - [Integrity Verification](#integrity-verification)
     - [Hash-Chain Validation](#hash-chain-validation)
+    - [Collector Re-Signing (optional - not preferred)](#collector-re-signing-optional---not-preferred)
     - [Per-Sink Delivery Status](#per-sink-delivery-status)
     - [Record Lifecycle](#record-lifecycle)
   - [Retry Guidance](#retry-guidance)
@@ -196,11 +197,15 @@ When a duplicate `audit.record.id` is received:
 
 ### Integrity Verification
 
-When `audit.integrity.value` is present the collector SHOULD verify
+When `audit.integrity.value` is present the receiver SHOULD verify
 it against the algorithm declared in the `Resource` attribute
 `audit.integrity.algorithm` and the key material referenced by
 `audit.integrity.certificate` in the collector's trust policy.
-Before verifying, the collector MUST serialize the `AuditRecord` to
+When `audit.integrity.signer` is absent, the receiver MUST treat
+the signature as having been produced by the originating SDK
+(equivalent to `audit.integrity.signer: producer`) and apply the
+producer's trust policy accordingly.
+Before verifying, the receiver MUST serialize the `AuditRecord` to
 JSON and canonicalize it using
 [RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785]; the
 `audit.integrity.*` attributes MUST be excluded from the canonical
@@ -210,11 +215,11 @@ record is the input to the verification operation.
 
 [rfc8785]: https://www.rfc-editor.org/rfc/rfc8785
 
-The collector MAY defer verification for low-latency ingest (returning
+The receiver MAY defer verification for low-latency ingest (returning
 `accepted_pending_verify`) but MUST complete verification before
 acknowledging delivery to any required sink.
 
-If verification fails the collector MUST:
+If verification fails the receiver MUST:
 
 1. Reject the record with domain status `rejected_verify_failed`.
 2. NOT forward the record to any sink.
@@ -226,7 +231,12 @@ When `audit.sequence.number` and `audit.sequence.prev_hash` are present the
 collector SHOULD validate chain continuity:
 
 - `audit.sequence.number` MUST be strictly greater than the previous
-  record's `audit.sequence.number` in the same audit stream.
+  record's `audit.sequence.number` in the same audit stream. The audit
+  stream is identified by `audit.sequence.stream_id` when present; if
+  `audit.sequence.stream_id` is absent the receiver MUST use the tuple
+  (`Resource.service.instance.id`, source connection identity) as a
+  best-effort stream key and SHOULD emit a warning that stream identity
+  is ambiguous.
 - `audit.sequence.prev_hash` MUST equal the `IntegrityHash` of the preceding
   record.
 
@@ -234,6 +244,24 @@ A broken chain SHOULD be surfaced as a warning metric and logged as a
 security event. The collector MAY still accept and forward a broken
 chain record but MUST annotate the delivery status with a chain
 validation warning.
+
+### Collector Re-Signing (optional - not preferred)
+
+A collector MAY re-sign records to attest pipeline custody. When it does:
+
+1. The collector MUST set `audit.integrity.signer` to `collector`.
+2. The collector MUST recompute `audit.integrity.value` using the
+   canonical JCS form of the record (excluding all `audit.integrity.*`
+   attributes) and the collector's own signing key.
+3. If the record already carries a producer signature
+   (`audit.integrity.signer` set to `producer`, or `audit.integrity.signer`
+   absent — absence defaults to `producer`), the collector MUST preserve
+   the original `audit.integrity.value` and `audit.integrity.signer`
+   values (e.g. as `audit.integrity.value.0` / `audit.integrity.signer.0`)
+   before writing its own. This preserves the non-repudiation chain.
+4. The collector's signing key and algorithm MUST be declared in the
+   collector's own `Resource` attributes (`audit.integrity.algorithm`,
+   `audit.integrity.certificate`), and MUST be distinct from the producer's.
 
 ### Per-Sink Delivery Status
 
