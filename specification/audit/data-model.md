@@ -318,16 +318,18 @@ for fire-and-forget actions where acknowledgement is not possible.
 
 #### Optional Attributes
 
-| Attribute name          | Type     | Required | Description                                           |
-|-------------------------|----------|----------|-------------------------------------------------------|
-| `audit.target.id`       | `string` | SHOULD   | Identifier of the resource acted upon.                |
-| `audit.target.type`     | `string` | SHOULD   | Type of the target resource.                          |
-| `audit.source.id`       | `string` | MAY      | Network address or identifier of the source.          |
-| `audit.source.type`     | `string` | MAY      | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`). |
-| `audit.integrity.value` | `string` | MAY      | Base64-encoded cryptographic integrity proof.         |
-| `audit.sequence.number` | `int`    | MAY      | Monotonic counter for hash-chain continuity.          |
-| `audit.sequence.prev_hash`       | `string` | MAY      | SHA-256 of the previous record in the stream.         |
-| `audit.schema.version`  | `string` | SHOULD   | Schema version of the audit payload.                  |
+| Attribute name             | Type     | Required | Description                                                                                  |
+|----------------------------|----------|----------|----------------------------------------------------------------------------------------------|
+| `audit.target.id`          | `string` | SHOULD   | Identifier of the resource acted upon.                                                       |
+| `audit.target.type`        | `string` | SHOULD   | Type of the target resource.                                                                 |
+| `audit.source.id`          | `string` | MAY      | Network address or identifier of the source.                                                 |
+| `audit.source.type`        | `string` | MAY      | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`).                                        |
+| `audit.integrity.value`    | `string` | MAY      | Base64-encoded cryptographic integrity proof.                                                |
+| `audit.integrity.signer`   | `string` | MAY      | Tier that produced the `audit.integrity.value`: `producer` (SDK/application, default) or `collector`. |
+| `audit.sequence.number`    | `int`    | MAY      | Monotonic counter for hash-chain continuity.                                                 |
+| `audit.sequence.prev_hash` | `string` | MAY      | SHA-256 of the previous record in the stream.                                                |
+| `audit.sequence.stream_id` | `string` | MAY      | Opaque identifier scoping this hash chain. UUID v4 RECOMMENDED.                              |
+| `audit.schema.version`     | `string` | SHOULD   | Schema version of the audit payload.                                                         |
 
 #### Target Attributes
 
@@ -380,6 +382,33 @@ canonicalization method for this purpose.
 
 [rfc8785]: https://www.rfc-editor.org/rfc/rfc8785
 
+**`audit.integrity.signer`**
+
+Identifies the pipeline tier that computed `audit.integrity.value`. This
+allows consumers to distinguish between a signature that attests the
+_point of action_ (producer) and one that attests _pipeline custody_
+(collector).
+
+| Value       | Meaning                                                                                                                                                                                          |
+|-------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `producer`  | The signature was computed by the SDK `SigningProcessor` at emit time, attesting that the record was not altered between the application and the SDK. This is the default and RECOMMENDED value. |
+| `collector` | The signature was computed by a Tier-2 Collector, attesting custody from the SDK exporter to the sink.                                                                                           |
+
+`producer` is the default value: when `audit.integrity.value` is present
+and `audit.integrity.signer` is absent, consumers MUST treat the
+signature as having been produced by the originating SDK (`producer`).
+The SDK `SigningProcessor` SHOULD always set `audit.integrity.signer` to
+`producer` explicitly rather than relying on this default.
+
+`audit.integrity.signer` SHOULD be set whenever `audit.integrity.value`
+is present.
+
+A record MAY carry two integrity proofs from different tiers. In that
+case the record SHOULD carry two separate `audit.integrity.value` /
+`audit.integrity.signer` pairs. Language SDKs that support multi-valued
+attributes SHOULD use a list; SDKs that do not MAY encode them as
+`audit.integrity.value.0` / `audit.integrity.signer.0` etc.
+
 When `audit.integrity.value` is set, `audit.integrity.algorithm` MUST
 be set as a `Resource` attribute.
 
@@ -398,8 +427,8 @@ sequences SHOULD populate both `audit.sequence.number` and
 
 **`audit.sequence.number`**
 
-A monotonically increasing integer counter, scoped to a single
-`AuditLogger` instance or a named audit stream. The first record in a
+A monotonically increasing integer counter, scoped to the audit stream
+identified by [`audit.sequence.stream_id`](#auditsequencestream_id). The first record in a
 stream SHOULD have `audit.sequence.number` equal to `1`. A gap between
 two consecutive values indicates that one or more records were lost or
 deleted and SHOULD trigger an alert.
@@ -415,6 +444,26 @@ the empty string
 A `audit.sequence.prev_hash` that does not match the stored `IntegrityHash` of
 the previous record indicates tampering and MUST be treated as a
 critical integrity violation.
+
+**`audit.sequence.stream_id`**
+
+An opaque identifier that scopes a hash chain to a single logical audit
+stream. A UUID v4 is RECOMMENDED. `audit.sequence.stream_id` SHOULD be
+set on every record that carries `audit.sequence.number` or
+`audit.sequence.prev_hash`.
+
+In multi-tenant deployments, in services that obtain multiple
+`AuditLogger` instances, and in batch export scenarios where records
+from different loggers share a single OTLP batch, `audit.sequence.stream_id`
+is the primary key that allows receivers to demultiplex records into their
+correct chains. Without it, a receiver can only use heuristics such as
+`Resource.service.instance.id` combined with `AuditLogger` name, which
+are not guaranteed to be globally unique.
+
+Two records belong to the same chain if and only if they share the same
+`audit.sequence.stream_id` value. The SDK SHOULD generate a single
+`stream_id` per `AuditLogger` instance at creation time and reuse it for
+all records emitted by that logger.
 
 ### Integrity Resource Attributes
 
