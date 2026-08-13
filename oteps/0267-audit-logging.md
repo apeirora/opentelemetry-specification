@@ -378,11 +378,33 @@ vocabulary. This OTEP does not prescribe a wire format beyond OTLP.
    written to two independent sinks simultaneously. Should this be a first-class
    configuration option of `AuditProvider`?
 
-7. **Stream identity across restarts** – `audit.sequence.stream_id` is
-   generated per `AuditLogger` instance lifetime. After a service restart
-   a new `stream_id` is generated, breaking the chain. Should SDKs persist
-   `stream_id` to durable storage (e.g. alongside the disk-backed queue)
-   to allow chain continuity across restarts?
+7. **Stream identity, restarts, and completeness boundaries** –
+   `audit.sequence.stream_id` is generated per `AuditLogger` instance
+   lifetime. After a service restart a new `stream_id` is generated,
+   breaking the chain. Should SDKs persist `stream_id` to durable storage
+   (e.g. alongside the disk-backed queue) to allow chain continuity across
+   restarts? Related: the specification currently has no explicit
+   **completeness boundary** — a verifier cannot distinguish a legitimately
+   closed stream from a truncated one (e.g. a lost batch or collector
+   crash). Without a seal record or equivalent end-of-sequence signal,
+   gaps masquerade as clean terminations. Should `ForceFlush` / `Shutdown`
+   emit an explicit terminal record, and should the [Collector's hash-chain
+   validation](../specification/audit/collector.md#hash-chain-validation)
+   define how to handle and annotate an unsealed stream end?
+
+8. **Key rotation across chain boundaries** – When a signing key rotates,
+   the new key signs the link to the previous chain segment, but nothing
+   signed by the outgoing key attests to the handover. A legitimate rotation
+   and a truncation followed by a rotation-shaped gap are indistinguishable
+   to a verifier. The current `audit.integrity.certificate` attribute
+   identifies only the active key, and `AuditReceipt` carries no key
+   identifier. Possible mitigations include:
+   a) a mandatory **key-transition record** that is co-signed by both the
+   outgoing and incoming key and inserted as a regular chain entry;
+   b) a per-record **`audit.integrity.key_id`** attribute so verifiers can map
+   records to keys across a rotating JWKS;
+   c) a `Resource`-level pointer to a JWKS endpoint.
+   The specification should settle the approach before implementations diverge.
 
 ## Prototypes
 
