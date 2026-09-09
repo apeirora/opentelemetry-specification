@@ -74,7 +74,7 @@ A `AuditProvider` MUST provide a way to associate a
 ### AuditProvider Creation
 
 The SDK SHOULD allow the creation of multiple independent
-`AuditProvider` instances. Although most applications will only need one.
+`AuditProvider` instances, although most applications need only one.
 
 Each `AuditProvider` instance MUST have its own independent queue,
 exporter pipeline, and failure counter.
@@ -211,8 +211,8 @@ full. The SDK MUST use one of the following strategies:
   fixed limit. The SDK MUST expose a configurable high-water-mark
   warning threshold. When the queue depth exceeds this threshold, the
   SDK SHOULD emit a warning via the SDK's internal logging. The SDK SHOULD
-  provide meaningfull metrics (for example, `audit.queue.depth`) to allow
-  operators to monitor the queue depth and set up alerts.
+  expose the metrics listed in [Observability](#observability) to allow
+  operators to monitor queue depth and set up alerts.
 - **Other lossless queuing strategy**: if the SDK implements a different
   strategy that guarantees no record loss (for example, DB persistence queue
   with back-pressure blocking), it MUST provide the same
@@ -368,10 +368,8 @@ MUST set `audit.integrity.signer` to `producer` on each record it signs,
 immediately after writing `audit.integrity.value`. Setting this value
 explicitly is RECOMMENDED even though `producer` is the default when the
 attribute is absent, so that consumers do not need to apply defaulting
-logic. It MUST be implemented as a
-separate processor that can be added to the pipeline in addition to
-the simple processor, to allow flexibility in the choice of signing
-algorithm and key management strategy.
+logic. It MUST be implemented as a separate processor that can be added to
+the pipeline independently of the simple or batching processor.
 
 [rfc8785]: https://www.rfc-editor.org/rfc/rfc8785
 
