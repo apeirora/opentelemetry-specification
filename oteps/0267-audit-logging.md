@@ -146,18 +146,18 @@ convention attributes where a direct mapping exists.
 
 **Optional / recommended attributes:**
 
-| Attribute name          | Type     | Description                                           |
-|-------------------------|----------|-------------------------------------------------------|
-| `audit.target.id`       | `string` | Identifier of the resource acted upon.                |
-| `audit.target.type`     | `string` | Type of the target resource.                          |
-| `audit.source.id`       | `string` | Network address or identifier of the source.          |
-| `audit.source.type`     | `string` | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`). |
-| `audit.integrity.value` | `string` | Base64-encoded signature or HMAC.                     |
-| `audit.sequence.number` | `int`    | Monotonic counter for hash-chain continuity.          |
-| `audit.sequence.prev_hash`       | `string` | SHA-256 of the preceding record.                      |
-| `audit.sequence.stream_id`  | `string` | Opaque identifier (UUID v4 RECOMMENDED) scoping the hash chain. Enables reliable demultiplexing in multi-tenant and multi-logger deployments. |
-| `audit.schema.version`  | `string` | Schema version (e.g. `1.0.0`).                        |
-| `audit.integrity.signer`    | `string` | Tier that produced `audit.integrity.value`: `producer` (SDK) or `collector`. |
+| Attribute name             | Type     | Description                                                                                                                                   |
+|----------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| `audit.target.id`          | `string` | Identifier of the resource acted upon.                                                                                                        |
+| `audit.target.type`        | `string` | Type of the target resource.                                                                                                                  |
+| `audit.source.id`          | `string` | Network address or identifier of the source.                                                                                                  |
+| `audit.source.type`        | `string` | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`).                                                                                         |
+| `audit.integrity.value`    | `string` | Base64-encoded signature or HMAC.                                                                                                             |
+| `audit.sequence.number`    | `int`    | Monotonic counter for hash-chain continuity.                                                                                                  |
+| `audit.sequence.prev_hash` | `string` | SHA-256 of the preceding record.                                                                                                              |
+| `audit.sequence.stream_id` | `string` | Opaque identifier (UUID v4 RECOMMENDED) scoping the hash chain. Enables reliable demultiplexing in multi-tenant and multi-logger deployments. |
+| `audit.schema.version`     | `string` | Schema version (e.g. `1.0.0`).                                                                                                                |
+| `audit.integrity.signer`   | `string` | Tier that produced `audit.integrity.value`: `producer` (SDK) or `collector`.                                                                  |
 
 The `Resource` carries `audit.integrity.algorithm` and
 `audit.integrity.certificate` (unchanged per-service metadata).
@@ -316,7 +316,7 @@ If the exporter cannot reach the sink:
 |-----------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
 | Synchronous `emit` adds latency to the calling thread     | An async variant with a durable local queue mitigates this; the queue size and flush interval are configurable.              |
 | A separate pipeline increases SDK complexity              | The audit pipeline deliberately reuses `LogRecord` as its wire format, so OTLP exporters can be reused with minimal changes. |
-| SHA-256 receipt requires a round-trip to the sink         | The receipt is optional for callers that do not need proof-of-delivery; a fire-and-forget async mode MAY omit it.            |
+| SHA-256 receipt requires a round-trip to the sink         | The receipt is optional for callers that do not need proof-of-delivery; a fire-and-forget async mode MAY omit it. _(Settled: the receipt is mandatory in the normative spec. See [sdk.md — Emit an AuditRecord](../specification/audit/sdk.md#emit-an-auditrecord).)_ |
 | Disk-backed queue introduces a dependency on localStorage | This is opt-in; the default is an in-memory queue with blocking back-pressure.                                               |
 
 ## Prior art and alternatives

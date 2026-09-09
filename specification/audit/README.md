@@ -37,8 +37,7 @@ sampling to a tamper-protected audit sink.
 
 The OpenTelemetry Audit Logging signal provides a purpose-built pipeline
 with the delivery and integrity guarantees that compliance frameworks
-demand. It extends OpenTelemetry's unified observability approach to
-the domain of security and compliance auditing.
+demand.
 
 ## Why a Dedicated Audit Logging Signal?
 

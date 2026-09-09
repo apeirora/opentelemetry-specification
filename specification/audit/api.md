@@ -145,10 +145,7 @@ The API MUST accept the following optional parameters:
 
 Additional optional attributes MAY be provided in `Attributes`. See
 the [Audit Record Data Model](./data-model.md#audit-semantic-attributes)
-for the full list, which includes `audit.target.id`, `audit.target.type`,
-`audit.source.id`, `audit.source.type`, `audit.integrity.value`,
-`audit.sequence.number`,
-`audit.sequence.prev_hash`, and `audit.schema.version`.
+for the full list.
 
 **Return value**: The API MUST return an
 [`AuditReceipt`](./data-model.md#auditreceipt-definition) when the

@@ -77,6 +77,10 @@ requirements:
 - The data model MUST be extensible via arbitrary key-value attributes
   to accommodate application-specific compliance requirements.
 
+- The data model MUST provide a way for an emitter to signal graceful
+  stream termination so that verifiers can distinguish a cleanly closed
+  stream from one that ended due to a crash or network loss.
+
 ### Relationship to LogRecord
 
 An `AuditRecord` is a `LogRecord` that uses the standard dedicated

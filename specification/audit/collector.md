@@ -48,10 +48,9 @@ collector receives `AuditRecord`s from SDK exporters (Tier-1),
 verifies their integrity, and distributes them to one or more required
 audit sinks.
 
-The Tier-2 collector is optional. SDK exporters MAY deliver directly
-to the audit sink when no collector is deployed. When a collector is
-present it MUST satisfy the same no-drop and at-least-once delivery
-guarantees as the SDK itself.
+When deployed, the Tier-2 collector MUST satisfy the same no-drop and
+at-least-once delivery guarantees as the SDK. SDK exporters MAY deliver
+directly to the audit sink when no collector is present.
 
 ```
 SDK Exporter  ──POST /v1/audit──►  Tier-2 Collector
