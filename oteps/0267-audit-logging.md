@@ -5,6 +5,41 @@ lossless, tamper-evident delivery of security-relevant events and satisfies
 compliance requirements such as ISO 27001.
 
 <!-- toc -->
+
+- [Audit Logging Signal](#audit-logging-signal)
+  - [Motivation](#motivation)
+    - [The problem with re-using the existing Log signal](#the-problem-with-re-using-the-existing-log-signal)
+    - [Use cases](#use-cases)
+    - [Why a new signal and not a new Log feature flag?](#why-a-new-signal-and-not-a-new-log-feature-flag)
+  - [Explanation](#explanation)
+    - [Signal overview](#signal-overview)
+    - [AuditProvider](#auditprovider)
+    - [AuditLogger](#auditlogger)
+    - [AuditRecord data model](#auditrecord-data-model)
+      - [LogRecord fields used](#logrecord-fields-used)
+      - [Audit semantic attributes](#audit-semantic-attributes)
+    - [AuditReceipt](#auditreceipt)
+    - [OTLP transport](#otlp-transport)
+      - [No partial success](#no-partial-success)
+      - [Instrumentation Scope is not applicable](#instrumentation-scope-is-not-applicable)
+      - [Durability at the sink is out of scope](#durability-at-the-sink-is-out-of-scope)
+  - [Internal details](#internal-details)
+    - [No sampling, no dropping](#no-sampling-no-dropping)
+    - [Processor restrictions](#processor-restrictions)
+    - [Stream identity and signature origin](#stream-identity-and-signature-origin)
+    - [Clock synchronisation](#clock-synchronisation)
+    - [Interaction with the existing Log signal](#interaction-with-the-existing-log-signal)
+    - [Failure handling](#failure-handling)
+  - [Trade-offs and mitigations](#trade-offs-and-mitigations)
+  - [Prior art and alternatives](#prior-art-and-alternatives)
+    - [Alternative 1 – Existing Log signal with a dedicated exporter](#alternative-1--existing-log-signal-with-a-dedicated-exporter)
+    - [Alternative 2 – Out-of-band audit library](#alternative-2--out-of-band-audit-library)
+    - [Alternative 3 – W3C Audit Vocabulary / CEF](#alternative-3--w3c-audit-vocabulary--cef)
+    - [Prior art in OTel](#prior-art-in-otel)
+  - [Open questions](#open-questions)
+  - [Prototypes](#prototypes)
+  - [Future possibilities](#future-possibilities)
+
 <!-- tocstop -->
 
 ## Motivation
@@ -146,18 +181,18 @@ convention attributes where a direct mapping exists.
 
 **Optional / recommended attributes:**
 
-| Attribute name             | Type     | Description                                                                                                                                   |
-|----------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------|
-| `audit.target.id`          | `string` | Identifier of the resource acted upon.                                                                                                        |
-| `audit.target.type`        | `string` | Type of the target resource.                                                                                                                  |
-| `audit.source.id`          | `string` | Network address or identifier of the source.                                                                                                  |
-| `audit.source.type`        | `string` | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`).                                                                                         |
-| `audit.integrity.value`    | `string` | Base64-encoded signature or HMAC.                                                                                                             |
-| `audit.sequence.number`    | `int`    | Monotonic counter for hash-chain continuity.                                                                                                  |
-| `audit.sequence.prev_hash` | `string` | SHA-256 of the preceding record.                                                                                                              |
-| `audit.sequence.stream_id` | `string` | Opaque identifier (UUID v4 RECOMMENDED) scoping the hash chain. Enables reliable demultiplexing in multi-tenant and multi-logger deployments. |
-| `audit.schema.version`     | `string` | Schema version (e.g. `1.0.0`).                                                                                                                |
-| `audit.integrity.signer`   | `string` | Tier that produced `audit.integrity.value`: `producer` (SDK) or `collector`.                                                                  |
+| Attribute name                 | Type     | Description                                                                                                                                   |
+|--------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| `audit.target.id`              | `string` | Identifier of the resource acted upon.                                                                                                        |
+| `audit.target.type`            | `string` | Type of the target resource.                                                                                                                  |
+| `audit.source.id`              | `string` | Network address or identifier of the source.                                                                                                  |
+| `audit.source.type`            | `string` | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`).                                                                                         |
+| `audit.integrity.value`        | `string` | Base64-encoded signature or HMAC.                                                                                                             |
+| `audit.sequence.number`        | `int`    | Monotonic counter for hash-chain continuity.                                                                                                  |
+| `audit.sequence.previous_hash` | `string` | SHA-256 of the preceding record.                                                                                                              |
+| `audit.sequence.stream_id`     | `string` | Opaque identifier (UUID v4 RECOMMENDED) scoping the hash chain. Enables reliable demultiplexing in multi-tenant and multi-logger deployments. |
+| `audit.schema.version`         | `string` | Schema version (e.g. `1.0.0`).                                                                                                                |
+| `audit.integrity.signer`       | `string` | Tier that produced `audit.integrity.value`: `producer` (SDK) or `collector`.                                                                  |
 
 The `Resource` carries `audit.integrity.algorithm` and
 `audit.integrity.certificate` (unchanged per-service metadata).
@@ -260,7 +295,7 @@ records MUST be rejected at configuration time.
 
 ### Stream identity and signature origin
 
-Hash-chain attributes (`audit.sequence.number`, `audit.sequence.prev_hash`)
+Hash-chain attributes (`audit.sequence.number`, `audit.sequence.previous_hash`)
 require a scope to be meaningful. Without an explicit stream identifier,
 a multi-tenant receiver cannot reliably demultiplex chains: two tenants
 or two `AuditLogger` instances may independently start their counters at
