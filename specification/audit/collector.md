@@ -110,7 +110,7 @@ And the following mandatory attributes in the `Attributes` map:
 Each record MAY include any attribute defined in the
 [Audit Semantic Attributes](./data-model.md#audit-semantic-attributes)
 section, including `audit.schema.version`, `audit.integrity.value`,
-`audit.sequence.number`, and `audit.sequence.prev_hash`. The signing algorithm
+`audit.sequence.number`, and `audit.sequence.previous_hash`. The signing algorithm
 and key reference are carried as `Resource` attributes
 `audit.integrity.algorithm` and `audit.integrity.certificate`.
 
@@ -226,7 +226,7 @@ If verification fails the receiver MUST:
 
 ### Hash-Chain Validation
 
-When `audit.sequence.number` and `audit.sequence.prev_hash` are present the
+When `audit.sequence.number` and `audit.sequence.previous_hash` are present the
 collector SHOULD validate chain continuity:
 
 - `audit.sequence.number` MUST be strictly greater than the previous
@@ -236,7 +236,7 @@ collector SHOULD validate chain continuity:
   (`Resource.service.instance.id`, source connection identity) as a
   best-effort stream key and SHOULD emit a warning that stream identity
   is ambiguous.
-- `audit.sequence.prev_hash` MUST equal the `IntegrityHash` of the preceding
+- `audit.sequence.previous_hash` MUST equal the `IntegrityHash` of the preceding
   record.
 
 A broken chain SHOULD be surfaced as a warning metric and logged as a

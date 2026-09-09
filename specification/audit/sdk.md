@@ -171,7 +171,7 @@ When `emit` is called, the SDK MUST:
 1. If `Attributes` does not contain `audit.record.id`, generate a
    UUID v4 and inject it into `Attributes` before any further
    processing.
-2. If `audit.sequence.number` or `audit.sequence.prev_hash` is present in
+2. If `audit.sequence.number` or `audit.sequence.previous_hash` is present in
    `Attributes`, the SDK MUST inject the logger's `stream_id` as `audit.sequence.stream_id`
    unless the caller has already set `audit.sequence.stream_id` explicitly.
 3. Set `ObservedTimestamp` to the current time if the caller did not
@@ -560,7 +560,7 @@ The Tier-2 collector SHOULD:
   algorithm declared in the `Resource` attribute
   `audit.integrity.algorithm` and the key material referenced by
   `audit.integrity.certificate`.
-- Validate `audit.sequence.number` continuity and `audit.sequence.prev_hash`
+- Validate `audit.sequence.number` continuity and `audit.sequence.previous_hash`
   chain integrity when these optional attributes are present.
 - Deliver each record to every configured required sink before
   returning a success response to the SDK exporter.
