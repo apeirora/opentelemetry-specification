@@ -323,21 +323,21 @@ for fire-and-forget actions where acknowledgement is not possible.
 
 #### Optional Attributes
 
-| Attribute name                     | Type     | Required | Description                                                                                                                                                                                                               |
-|------------------------------------|----------|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `audit.target.id`                  | `string` | SHOULD   | Identifier of the resource acted upon.                                                                                                                                                                                    |
-| `audit.target.type`                | `string` | SHOULD   | Type of the target resource.                                                                                                                                                                                              |
-| `audit.source.id`                  | `string` | MAY      | Network address or identifier of the source.                                                                                                                                                                              |
-| `audit.source.type`                | `string` | MAY      | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`).                                                                                                                                                                     |
-| `audit.integrity.value`            | `string` | MAY      | Base64-encoded cryptographic integrity proof.                                                                                                                                                                             |
-| `audit.integrity.signer`           | `string` | MAY      | Tier that produced the `audit.integrity.value`: `producer` (SDK/application, default) or `collector`.                                                                                                                     |
-| `audit.integrity.canonicalization` | `string` | MAY      | Canonicalization scheme applied before signing or MACing. `jcs` (RFC 8785) is the default and RECOMMENDED value. Set explicitly when a producer uses a different canonicalization so that verifiers do not have to guess. |
-| `audit.sequence.number`            | `int`    | MAY      | Monotonic counter for hash-chain continuity.                                                                                                                                                                              |
-| `audit.sequence.prev_hash`         | `string` | MAY      | SHA-256 of the previous record's `IntegrityHash` in the same stream. Absent on the first record of a stream (genesis).                                                                                                    |
-| `audit.sequence.prev_record_id`    | `string` | MAY      | `audit.record.id` of the immediately preceding record in the same stream. Absent on the first record of a stream (genesis). Provides a resolvable locator for the chain pointer independently of hash comparison.         |
-| `audit.sequence.end`               | `bool`   | MAY      | `true` on the last record of a gracefully closed stream. Absence means the stream end is unknown (e.g. crash). MUST NOT appear on any record that is not the final record of the stream.                                 |
-| `audit.sequence.stream_id`         | `string` | MAY      | Opaque identifier scoping this hash chain. UUID v4 RECOMMENDED.                                                                                                                                                           |
-| `audit.schema.version`             | `string` | SHOULD   | Schema version of the audit payload.                                                                                                                                                                                      |
+| Attribute name                      | Type     | Required | Description                                                                                                                                                                                                               |
+|-------------------------------------|----------|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `audit.target.id`                   | `string` | SHOULD   | Identifier of the resource acted upon.                                                                                                                                                                                    |
+| `audit.target.type`                 | `string` | SHOULD   | Type of the target resource.                                                                                                                                                                                              |
+| `audit.source.id`                   | `string` | MAY      | Network address or identifier of the source.                                                                                                                                                                              |
+| `audit.source.type`                 | `string` | MAY      | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`).                                                                                                                                                                     |
+| `audit.integrity.value`             | `string` | MAY      | Base64-encoded cryptographic integrity proof.                                                                                                                                                                             |
+| `audit.integrity.signer`            | `string` | MAY      | Tier that produced the `audit.integrity.value`: `producer` (SDK/application, default) or `collector`.                                                                                                                     |
+| `audit.integrity.canonicalization`  | `string` | MAY      | Canonicalization scheme applied before signing or MACing. `jcs` (RFC 8785) is the default and RECOMMENDED value. Set explicitly when a producer uses a different canonicalization so that verifiers do not have to guess. |
+| `audit.sequence.number`             | `int`    | MAY      | Monotonic counter for hash-chain continuity.                                                                                                                                                                              |
+| `audit.sequence.previous_hash`      | `string` | MAY      | SHA-256 of the previous record's `IntegrityHash` in the same stream. Absent on the first record of a stream (genesis).                                                                                                    |
+| `audit.sequence.previous_record_id` | `string` | MAY      | `audit.record.id` of the immediately preceding record in the same stream. Absent on the first record of a stream (genesis). Provides a resolvable locator for the chain pointer independently of hash comparison.         |
+| `audit.sequence.end`                | `bool`   | MAY      | `true` on the last record of a gracefully closed stream. Absence means the stream end is unknown (e.g. crash). MUST NOT appear on any record that is not the final record of the stream.                                  |
+| `audit.sequence.stream_id`          | `string` | MAY      | Opaque identifier scoping this hash chain. UUID v4 RECOMMENDED.                                                                                                                                                           |
+| `audit.schema.version`              | `string` | SHOULD   | Schema version of the audit payload.                                                                                                                                                                                      |
 
 #### Target Attributes
 
@@ -449,12 +449,12 @@ The optional ordering attributes enable hash-chain validation across a
 sequence of `AuditRecord`s. When populated, receivers can detect
 whether records have been deleted, inserted, or reordered by verifying
 that the sequence numbers are monotonically increasing and that each
-`audit.sequence.prev_hash` matches the `IntegrityHash` returned in the preceding
+`audit.sequence.previous_hash` matches the `IntegrityHash` returned in the preceding
 record's `AuditReceipt`.
 
 Implementations that require strong tamper-evidence for ordered
 sequences SHOULD populate `audit.sequence.number`,
-`audit.sequence.prev_hash`, and `audit.sequence.prev_record_id`.
+`audit.sequence.previous_hash`, and `audit.sequence.previous_record_id`.
 
 **`audit.sequence.number`**
 
@@ -464,27 +464,27 @@ stream SHOULD have `audit.sequence.number` equal to `1`. A gap between
 two consecutive values indicates that one or more records were lost or
 deleted and SHOULD trigger an alert.
 
-**`audit.sequence.prev_hash`**
+**`audit.sequence.previous_hash`**
 
 The `IntegrityHash` of the immediately preceding record in the same
 audit stream (as returned in the preceding `AuditReceipt`).
 
 The first record of a stream (genesis record) MUST omit
-`audit.sequence.prev_hash`. Absence of this attribute is the
+`audit.sequence.previous_hash`. Absence of this attribute is the
 normative signal that the record opens a new chain; receivers MUST NOT
 require a magic constant for genesis detection.
 
-A `audit.sequence.prev_hash` that does not match the stored `IntegrityHash` of
+A `audit.sequence.previous_hash` that does not match the stored `IntegrityHash` of
 the previous record indicates tampering and MUST be treated as a
 critical integrity violation.
 
-**`audit.sequence.prev_record_id`**
+**`audit.sequence.previous_record_id`**
 
 The `audit.record.id` of the immediately preceding record in the same
 audit stream. The first record of a stream (genesis record) MUST omit
 this attribute.
 
-`audit.sequence.prev_hash` binds the chain by content; `audit.sequence.prev_record_id`
+`audit.sequence.previous_hash` binds the chain by content; `audit.sequence.previous_record_id`
 provides a resolvable locator for the predecessor across storage systems,
 shards, and retention boundaries. Receivers that need to retrieve the
 predecessor record for verification use this attribute rather than
@@ -515,7 +515,7 @@ chain violation.
 An opaque identifier that scopes a hash chain to a single logical audit
 stream. A UUID v4 is RECOMMENDED. `audit.sequence.stream_id` SHOULD be
 set on every record that carries `audit.sequence.number` or
-`audit.sequence.prev_hash`.
+`audit.sequence.previous_hash`.
 
 In multi-tenant deployments, in services that obtain multiple
 `AuditLogger` instances, and in batch export scenarios where records
