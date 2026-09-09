@@ -378,19 +378,22 @@ vocabulary. This OTEP does not prescribe a wire format beyond OTLP.
    written to two independent sinks simultaneously. Should this be a first-class
    configuration option of `AuditProvider`?
 
-7. **Stream identity, restarts, and completeness boundaries** –
+7. **Stream identity and restarts** –
    `audit.sequence.stream_id` is generated per `AuditLogger` instance
    lifetime. After a service restart a new `stream_id` is generated,
    breaking the chain. Should SDKs persist `stream_id` to durable storage
    (e.g. alongside the disk-backed queue) to allow chain continuity across
-   restarts? Related: the specification currently has no explicit
-   **completeness boundary** — a verifier cannot distinguish a legitimately
-   closed stream from a truncated one (e.g. a lost batch or collector
-   crash). Without a seal record or equivalent end-of-sequence signal,
-   gaps masquerade as clean terminations. Should `ForceFlush` / `Shutdown`
-   emit an explicit terminal record, and should the [Collector's hash-chain
-   validation](../specification/audit/collector.md#hash-chain-validation)
-   define how to handle and annotate an unsealed stream end?
+   restarts?
+
+   **Completeness boundary – resolved:** The data model now defines
+   [`audit.sequence.end`](../specification/audit/data-model.md#ordering-attributes),
+   a boolean attribute set to `true` on the last record emitted during a
+   graceful `ForceFlush` / `Shutdown`. Absence means the stream end is
+   unknown (crash or still-running stream) and MUST NOT be treated as a
+   chain violation. A post-terminal record carrying the same
+   `audit.sequence.stream_id` is a chain violation. See the
+   [Ordering Attributes](../specification/audit/data-model.md#ordering-attributes)
+   section for the full normative definition.
 
 8. **Key rotation across chain boundaries** – When a signing key rotates,
    the new key signs the link to the previous chain segment, but nothing

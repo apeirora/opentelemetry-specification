@@ -331,6 +331,7 @@ for fire-and-forget actions where acknowledgement is not possible.
 | `audit.sequence.number`            | `int`    | MAY      | Monotonic counter for hash-chain continuity.                                                                                                                                                                              |
 | `audit.sequence.prev_hash`         | `string` | MAY      | SHA-256 of the previous record's `IntegrityHash` in the same stream. Absent on the first record of a stream (genesis).                                                                                                    |
 | `audit.sequence.prev_record_id`    | `string` | MAY      | `audit.record.id` of the immediately preceding record in the same stream. Absent on the first record of a stream (genesis). Provides a resolvable locator for the chain pointer independently of hash comparison.         |
+| `audit.sequence.end`               | `bool`   | MAY      | `true` on the last record of a gracefully closed stream. Absence means the stream end is unknown (e.g. crash). MUST NOT appear on any record that is not the final record of the stream.                                 |
 | `audit.sequence.stream_id`         | `string` | MAY      | Opaque identifier scoping this hash chain. UUID v4 RECOMMENDED.                                                                                                                                                           |
 | `audit.schema.version`             | `string` | SHOULD   | Schema version of the audit payload.                                                                                                                                                                                      |
 
@@ -484,6 +485,26 @@ provides a resolvable locator for the predecessor across storage systems,
 shards, and retention boundaries. Receivers that need to retrieve the
 predecessor record for verification use this attribute rather than
 relying solely on sequence-number arithmetic.
+
+**`audit.sequence.end`**
+
+When set to `true`, signals that this is the last record of the stream
+and that the emitting `AuditLogger` was shut down gracefully. The SDK
+SHOULD set this attribute on the final record emitted during
+`ForceFlush` or `Shutdown`.
+
+Absence of `audit.sequence.end` does not indicate an error — it is the
+normal state for every record except the terminal one, and also the
+inevitable state of any stream whose emitter crashed or was forcibly
+killed. Receivers and verifiers MUST NOT treat a missing
+`audit.sequence.end` as a chain violation; it is an ambiguous boundary
+(clean end or crash), not proof of tampering.
+
+`audit.sequence.end` MUST NOT be set to `true` on any record other than
+the intended final record of the stream. Once a record with
+`audit.sequence.end: true` has been persisted, any subsequent record
+carrying the same `audit.sequence.stream_id` MUST be treated as a
+chain violation.
 
 **`audit.sequence.stream_id`**
 
