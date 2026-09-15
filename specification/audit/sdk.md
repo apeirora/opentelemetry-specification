@@ -359,10 +359,22 @@ base64-encoded asymmetric digital signature or symmetric HMAC, as
 determined by the `audit.integrity.algorithm` `Resource` attribute
 configured on the `AuditProvider`. Before signing, the processor
 MUST serialize the `AuditRecord` to JSON and canonicalize it using
-[RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785]; the
-`audit.integrity.*` attributes MUST be excluded from the canonical
-form — they carry the proof itself and MUST NOT be part of the
-signed payload. The canonical byte sequence of the remaining record
+[RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785]. The
+following fields MUST be excluded from the canonical form:
+
+- All `audit.integrity.*` attributes — they carry the proof itself
+  and MUST NOT be part of the signed payload.
+- `SeverityNumber` and `SeverityText` — excluding them prevents a
+  non-deterministic canonical form if a producer sets these fields
+  despite the SHOULD NOT requirement.
+
+OTLP `AnyValue` scalars MUST be encoded as single-key wrapper objects
+keyed by their type name (e.g. `{"stringValue": "foo"}`, `{"intValue": 123}`,
+`{"doubleValue": 1.5}`, `{"boolValue": true}`, `{"bytesValue": "<base64>"}`),
+matching OTLP/JSON encoding conventions. `Body`, when set, MUST be included in
+the signed payload using the same encoding; an absent or unset `Body`
+MUST be omitted so that no-body and empty-body records remain
+distinguishable. The canonical byte sequence of the remaining record
 is the input to the signing or HMAC operation. The signing processor
 MUST set `audit.integrity.signer` to `producer` on each record it signs,
 immediately after writing `audit.integrity.value`. Setting this value
