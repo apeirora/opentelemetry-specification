@@ -36,6 +36,7 @@ weight: 2
       - [Integrity Attributes](#integrity-attributes)
       - [Canonicalization Attribute](#canonicalization-attribute)
       - [Ordering Attributes](#ordering-attributes)
+      - [Security scope of hash-chain integrity](#security-scope-of-hash-chain-integrity)
     - [Integrity Resource Attributes](#integrity-resource-attributes)
       - [Attribute: `audit.integrity.algorithm`](#attribute-auditintegrityalgorithm)
       - [Attribute: `audit.integrity.certificate`](#attribute-auditintegritycertificate)
@@ -414,6 +415,20 @@ absent or unset `Body` MUST be omitted entirely so that a record with
 no body and a record with a present but empty body remain
 distinguishable.
 
+`Timestamp`, `ObservedTimestamp`, and any other nanosecond-precision
+integer fields MUST be serialized as decimal strings (e.g.
+`"1714041600000000000"`) rather than as JSON numbers. JSON numbers are
+limited to 53-bit integer precision (IEEE 754 `double`); a nanosecond
+Unix timestamp requires 63 bits, so a bare JSON number silently loses
+the low-order digits and produces a different canonical form than the
+original bytes. `intValue` attributes that exceed 2^53 MUST likewise be
+serialized as decimal strings inside their wrapper object:
+`{"intValue": "9007199254740993"}`. Implementations that ingest records
+via protobuf before signing MUST apply this encoding before invoking
+JCS; implementations that ingest via OTLP/JSON MUST verify that the
+source encoding already satisfies it before treating the bytes as
+canonical.
+
 [rfc8785]: https://www.rfc-editor.org/rfc/rfc8785
 
 **`audit.integrity.signer`**
@@ -555,6 +570,28 @@ Two records belong to the same chain if and only if they share the same
 `audit.sequence.stream_id` value. The SDK SHOULD generate a single
 `stream_id` per `AuditLogger` instance at creation time and reuse it for
 all records emitted by that logger.
+
+#### Security scope of hash-chain integrity
+
+The ordering attributes (`audit.sequence.number`, `audit.sequence.previous_hash`,
+`audit.sequence.stream_id`) provide tamper-evidence against an adversary
+who does _not_ hold the signing key: a gap in sequence numbers, a
+mismatched previous hash, or a missing genesis record all signal
+deletion, insertion, or reordering.
+
+They do not provide fork-prevention against an adversary who _holds_ the
+signing key. A producer in possession of the key can construct two
+internally-consistent chains under the same `stream_id` and serve a
+different one to each verifier; every record in both chains will pass
+per-record signature verification. Detecting this requires an independent
+second observer — a cosigner or transparency log that refuses to sign
+two inconsistent chain tips for the same stream. Such a witness is
+outside the scope of this specification.
+
+Deployments with a strong non-repudiation requirement SHOULD operate an
+external witness service. Absent one, the guarantee this specification
+provides is integrity _of the chain that was delivered_, not proof that
+no alternative chain exists.
 
 ### Integrity Resource Attributes
 
