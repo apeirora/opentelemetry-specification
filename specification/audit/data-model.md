@@ -211,6 +211,13 @@ attributes here.
 The `Body` MUST NOT duplicate information already present in the
 mandatory `Attributes`.
 
+When a `SigningProcessor` is in the pipeline, a set `Body` MUST be
+included in the signed payload (see
+[`audit.integrity.value`](#integrity-attributes)). An absent or unset
+`Body` MUST be omitted from the signed payload — this ensures that a
+record with no body cannot verify against the signature of a record
+that carries one.
+
 #### Field: `Attributes`
 
 | Property | Value                                   |
@@ -381,12 +388,31 @@ digital signature or a symmetric HMAC, as indicated by the
 Before signing or verifying, the `AuditRecord` MUST be serialized to
 JSON and then canonicalized using
 [RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785]. The
-`audit.integrity.*` attributes MUST be excluded from the canonical
-form before signing — they carry the proof itself and MUST NOT be
-part of the signed payload. The canonical byte sequence of the
-remaining record is the input to the signing or HMAC operation.
-Implementations MUST NOT use any other serialization or
-canonicalization method for this purpose.
+following fields MUST be excluded from the canonical form before
+signing:
+
+- All `audit.integrity.*` attributes — they carry the proof itself
+  and MUST NOT be part of the signed payload.
+- `SeverityNumber` and `SeverityText` — these fields MUST NOT be set
+  on audit records (see [LogRecord Field Usage](#logrecord-field-usage));
+  excluding them prevents a non-deterministic canonical form if a
+  producer sets them anyway.
+
+The canonical byte sequence of the remaining record is the input to the
+signing or HMAC operation. Implementations MUST NOT use any other
+serialization or canonicalization method for this purpose.
+
+When serializing `AuditRecord` fields and attributes to JSON for
+signing, OTLP `AnyValue` scalars MUST be encoded as single-key wrapper
+objects keyed by their type name — for example `{"stringValue": "foo"}`,
+`{"intValue": 123}`, `{"doubleValue": 1.5}`, `{"boolValue": true}`,
+`{"bytesValue": "<base64>"}`. This matches OTLP/JSON encoding conventions
+and ensures that values of different types with identical textual
+representations produce distinct canonical bytes. `Body`, when set,
+MUST be included in the signed payload using the same encoding; an
+absent or unset `Body` MUST be omitted entirely so that a record with
+no body and a record with a present but empty body remain
+distinguishable.
 
 [rfc8785]: https://www.rfc-editor.org/rfc/rfc8785
 
