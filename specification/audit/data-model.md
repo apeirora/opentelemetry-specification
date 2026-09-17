@@ -421,7 +421,7 @@ distinguishable.
 integer fields MUST be serialized as decimal strings (e.g.
 `"1714041600000000000"`) rather than as JSON numbers. JSON numbers are
 limited to 53-bit integer precision (IEEE 754 `double`); a nanosecond
-Unix timestamp requires 63 bits, so a bare JSON number silently loses
+UNIX timestamp requires 63 bits, so a bare JSON number silently loses
 the low-order digits and produces a different canonical form than the
 original bytes. `intValue` attributes that exceed 2^53 MUST likewise be
 serialized as decimal strings inside their wrapper object:
@@ -473,7 +473,7 @@ and then restarted under a new key.
 
 **`EventName`** MUST be `audit.integrity.key-transition` on this record.
 
-**`Body`** MUST be a kvlist `AnyValue` containing an `incoming_key` map
+**`Body`** MUST be a key-value list `AnyValue` containing an `incoming_key` map
 with the following fields:
 
 | Field in `incoming_key` | Required | Description                                                                                                                                                                      |
