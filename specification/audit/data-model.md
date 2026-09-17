@@ -34,6 +34,7 @@ weight: 2
       - [Target Attributes](#target-attributes)
       - [Source Attributes](#source-attributes)
       - [Integrity Attributes](#integrity-attributes)
+      - [Key-Transition Record](#key-transition-record)
       - [Canonicalization Attribute](#canonicalization-attribute)
       - [Ordering Attributes](#ordering-attributes)
       - [Security scope of hash-chain integrity](#security-scope-of-hash-chain-integrity)
@@ -339,6 +340,7 @@ for fire-and-forget actions where acknowledgement is not possible.
 | `audit.source.type`                 | `string` | MAY      | Type of the source (e.g. `ipv4`, `ipv6`, `hostname`).                                                                                                                                                                     |
 | `audit.integrity.value`             | `string` | MAY      | Base64-encoded cryptographic integrity proof.                                                                                                                                                                             |
 | `audit.integrity.signer`            | `string` | MAY      | Tier that produced the `audit.integrity.value`: `producer` (SDK/application, default) or `collector`.                                                                                                                     |
+| `audit.integrity.new_value`         | `string` | MAY      | On a key-transition record: base64-encoded signature produced by the **incoming** key over the same canonical form as `audit.integrity.value`. MUST be present on every `audit.integrity.key-transition` record.          |
 | `audit.integrity.canonicalization`  | `string` | MAY      | Canonicalization scheme applied before signing or MACing. `jcs` (RFC 8785) is the default and RECOMMENDED value. Set explicitly when a producer uses a different canonicalization so that verifiers do not have to guess. |
 | `audit.sequence.number`             | `int`    | MAY      | Monotonic counter for hash-chain continuity.                                                                                                                                                                              |
 | `audit.sequence.previous_hash`      | `string` | MAY      | SHA-256 of the previous record's `IntegrityHash` in the same stream. Absent on the first record of a stream (genesis).                                                                                                    |
@@ -460,6 +462,69 @@ attributes SHOULD use a list; SDKs that do not MAY encode them as
 
 When `audit.integrity.value` is set, `audit.integrity.algorithm` MUST
 be set as a `Resource` attribute.
+
+#### Key-Transition Record
+
+When the active signing key is rotated, the SDK MUST emit a dedicated
+chain record before switching to the new key. This record bridges the
+outgoing and incoming keys so that a verifier holding only the incoming
+key cannot be tricked into accepting a chain that was silently truncated
+and then restarted under a new key.
+
+**`EventName`** MUST be `audit.integrity.key-transition` on this record.
+
+**`Body`** MUST be a kvlist `AnyValue` containing an `incoming_key` map
+with the following fields:
+
+| Field in `incoming_key` | Required | Description                                                                                                                                                                      |
+|-------------------------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `certificate`           | MAY      | Base64 (standard, no line wrapping) of the DER-encoded X.509 certificate. Self-contained; no out-of-band lookup needed.                                                          |
+| `fingerprint`           | MAY      | `sha256:<hex>` or `sha1:<hex>` of the DER certificate. Lowercase hex, no separators within the hex portion.                                                                      |
+| `key_id`                | MAY      | Opaque key identifier (e.g. JWK `kid`). Requires out-of-band key retrieval.                                                                                                      |
+| `ski`                   | MAY      | Subject Key Identifier as lowercase hex without separators.                                                                                                                      |
+| `issuer_serial`         | MAY      | Issuer DN and serial separated by `/` (e.g. `CN=MyCA,O=Acme/12345`).                                                                                                             |
+| `algorithm`             | MAY      | JWA or IANA MAC algorithm identifier for the incoming key. MUST be set when the incoming key uses a different algorithm than the current `Resource` `audit.integrity.algorithm`. |
+
+At least one of `certificate`, `fingerprint`, `key_id`, `ski`, or
+`issuer_serial` MUST be present. `certificate` is RECOMMENDED as it
+makes the record self-contained for offline verification.
+
+The `Body` is part of the canonical form and is therefore covered by
+the outgoing key's signature in `audit.integrity.value`. This is what
+prevents an attacker from substituting an arbitrary incoming key: the
+outgoing key explicitly endorses the `incoming_key` payload.
+
+**`audit.integrity.value`** MUST carry the signature produced by the
+**outgoing** key over the canonical form of this record (with all
+`audit.integrity.*` attributes excluded from the canonical form as
+usual).
+
+**`audit.integrity.new_value`** MUST carry the signature produced by
+the **incoming** key over the same canonical form. This proves that the
+incoming key's holder is aware of and consents to the transition.
+
+The `audit.integrity.certificate` Resource attribute continues to
+identify the outgoing key for the lifetime of the batch in which the
+transition record appears. Implementations MUST switch `Resource`
+`audit.integrity.certificate` to the incoming key for all subsequent
+batches.
+
+Verifiers MUST reject any key change that is not bridged by an
+`audit.integrity.key-transition` record carrying valid signatures from
+both the outgoing key (`audit.integrity.value`) and the incoming key
+(`audit.integrity.new_value`) over a `Body` that names the incoming key.
+
+Example `Body`:
+
+```json
+{
+  "incoming_key": {
+    "certificate": "MIIBIjANBgkq…",
+    "fingerprint": "sha256:3a5f9c2e117b4d8f…",
+    "algorithm":   "ES256"
+  }
+}
+```
 
 #### Canonicalization Attribute
 

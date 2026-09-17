@@ -384,6 +384,45 @@ vocabulary. This OTEP does not prescribe a wire format beyond OTLP.
   `AuditLogger`/`AuditProvider` hierarchy mirrors the `Logger`/`LoggerProvider`
   hierarchy introduced here.
 
+## Resolved decisions
+
+1. **Stream completeness boundary** –
+   `audit.sequence.stream_id` is generated per `AuditLogger` instance
+   lifetime. After a service restart a new `stream_id` is generated,
+   which would leave the chain open-ended. The data model resolves this
+   with [`audit.sequence.end`](../specification/audit/data-model.md#ordering-attributes):
+   a boolean attribute set to `true` on the last record emitted during a
+   graceful `ForceFlush` / `Shutdown`. Absence means the stream end is
+   unknown (crash or still-running stream) and MUST NOT be treated as a
+   chain violation. A post-terminal record carrying the same
+   `audit.sequence.stream_id` is a chain violation. See
+   [Ordering Attributes](../specification/audit/data-model.md#ordering-attributes)
+   for the full normative definition.
+
+2. **Key rotation across chain boundaries** –
+   When a signing key rotates, the outgoing key signs nothing that
+   attests to the handover. A verifier holding only the incoming key
+   cannot distinguish a legitimate rotation from a truncation followed
+   by a rotation-shaped gap, because in the attack scenario the attacker
+   holds the incoming key rather than the outgoing one. A transition
+   record signed by the outgoing key closes that gap directly, without
+   requiring external witnesses.
+
+   The data model therefore requires a
+   [key-transition record](../specification/audit/data-model.md#key-transition-record):
+   when the active signing key is replaced, the SDK MUST emit a chain
+   record with `EventName` `audit.integrity.key-transition`. The
+   incoming key is described in a structured `Body` payload (`incoming_key`
+   kvlist with `certificate`, `fingerprint`, `key_id`, `ski`,
+   `issuer_serial`, and optional `algorithm` fields). Because `Body` is
+   part of the canonical form, the outgoing key's signature in
+   `audit.integrity.value` explicitly endorses the incoming key — an
+   attacker cannot substitute an arbitrary key without holding the
+   outgoing private key. `audit.integrity.new_value` carries the
+   incoming key's countersignature over the same canonical form, proving
+   the incoming key holder consents to the transition. Verifiers MUST
+   reject a key change that is not bridged by such a co-signed record.
+
 ## Open questions
 
 1. **OTLP endpoint path** – Should audit records share `/v1/logs` with a
@@ -412,37 +451,6 @@ vocabulary. This OTEP does not prescribe a wire format beyond OTLP.
 6. **Multi-sink fan-out** – Some compliance frameworks require logs to be
    written to two independent sinks simultaneously. Should this be a first-class
    configuration option of `AuditProvider`?
-
-7. **Stream identity and restarts** –
-   `audit.sequence.stream_id` is generated per `AuditLogger` instance
-   lifetime. After a service restart a new `stream_id` is generated,
-   breaking the chain. Should SDKs persist `stream_id` to durable storage
-   (e.g. alongside the disk-backed queue) to allow chain continuity across
-   restarts?
-
-   **Completeness boundary – resolved:** The data model now defines
-   [`audit.sequence.end`](../specification/audit/data-model.md#ordering-attributes),
-   a boolean attribute set to `true` on the last record emitted during a
-   graceful `ForceFlush` / `Shutdown`. Absence means the stream end is
-   unknown (crash or still-running stream) and MUST NOT be treated as a
-   chain violation. A post-terminal record carrying the same
-   `audit.sequence.stream_id` is a chain violation. See the
-   [Ordering Attributes](../specification/audit/data-model.md#ordering-attributes)
-   section for the full normative definition.
-
-8. **Key rotation across chain boundaries** – When a signing key rotates,
-   the new key signs the link to the previous chain segment, but nothing
-   signed by the outgoing key attests to the handover. A legitimate rotation
-   and a truncation followed by a rotation-shaped gap are indistinguishable
-   to a verifier. The current `audit.integrity.certificate` attribute
-   identifies only the active key, and `AuditReceipt` carries no key
-   identifier. Possible mitigations include:
-   a) a mandatory **key-transition record** that is co-signed by both the
-   outgoing and incoming key and inserted as a regular chain entry;
-   b) a per-record **`audit.integrity.key_id`** attribute so verifiers can map
-   records to keys across a rotating JWKS;
-   c) a `Resource`-level pointer to a JWKS endpoint.
-   The specification should settle the approach before implementations diverge.
 
 ## Prototypes
 
