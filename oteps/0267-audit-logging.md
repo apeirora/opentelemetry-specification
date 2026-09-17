@@ -36,6 +36,7 @@ compliance requirements such as ISO 27001.
     - [Alternative 2 – Out-of-band audit library](#alternative-2--out-of-band-audit-library)
     - [Alternative 3 – W3C Audit Vocabulary / CEF](#alternative-3--w3c-audit-vocabulary--cef)
     - [Prior art in OTel](#prior-art-in-otel)
+  - [Resolved decisions](#resolved-decisions)
   - [Open questions](#open-questions)
   - [Prototypes](#prototypes)
   - [Future possibilities](#future-possibilities)
@@ -413,7 +414,7 @@ vocabulary. This OTEP does not prescribe a wire format beyond OTLP.
    when the active signing key is replaced, the SDK MUST emit a chain
    record with `EventName` `audit.integrity.key-transition`. The
    incoming key is described in a structured `Body` payload (`incoming_key`
-   kvlist with `certificate`, `fingerprint`, `key_id`, `ski`,
+   key-value list with `certificate`, `fingerprint`, `key_id`, `ski`,
    `issuer_serial`, and optional `algorithm` fields). Because `Body` is
    part of the canonical form, the outgoing key's signature in
    `audit.integrity.value` explicitly endorses the incoming key — an
