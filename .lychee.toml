@@ -21,6 +21,7 @@ exclude = [
   'https://javadoc.io/doc/org.apache.logging.log4j/log4j-api/latest/org.apache.logging.log4j/org/apache/logging/log4j/Logger.html',
   'https://www.jaegertracing.io/docs/1.8/client-libraries/client-features/', # was removed and old version is 404
   '^https://yaml.org/spec/1.2.2/', # 404s for bots but valid in browser
+  '^https://www.wiley.com/.*$', # depends on your "accept" configuration
   # anchors on this page are rendered client-side (JS accordion), so lychee
   # cannot verify the #type-* fragments even though they work in a browser
   '^https://opentelemetry.io/docs/specs/otel-config/types/#'
