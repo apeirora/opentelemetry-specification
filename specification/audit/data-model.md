@@ -744,7 +744,7 @@ record MUST be serialized to JSON and canonicalized using
 [RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785] before
 hashing. All `audit.integrity.*` attributes MUST be excluded from the
 canonical form before hashing, using the same exclusion rule as the
-signing preimage (see [Integrity Value Attribute](#integrity-value-attribute)).
+signing preimage (see [Integrity Attributes](#integrity-attributes)).
 This ensures that a collector countersignature added after initial
 persistence does not change the hash value that chain pointers reference.
 Returned to the emitting application so that it can verify
