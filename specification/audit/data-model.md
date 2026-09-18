@@ -343,7 +343,7 @@ for fire-and-forget actions where acknowledgement is not possible.
 | `audit.integrity.new_value`         | `string` | MAY      | On a key-transition record: base64-encoded signature produced by the **incoming** key over the same canonical form as `audit.integrity.value`. MUST be present on every `audit.integrity.key-transition` record.          |
 | `audit.integrity.canonicalization`  | `string` | MAY      | Canonicalization scheme applied before signing or MACing. `jcs` (RFC 8785) is the default and RECOMMENDED value. Set explicitly when a producer uses a different canonicalization so that verifiers do not have to guess. |
 | `audit.sequence.number`             | `int`    | MAY      | Monotonic counter for hash-chain continuity.                                                                                                                                                                              |
-| `audit.sequence.previous_hash`      | `string` | MAY      | SHA-256 of the previous record's `IntegrityHash` in the same stream. Absent on the first record of a stream (genesis).                                                                                                    |
+| `audit.sequence.previous_hash`      | `string` | MAY      | The `IntegrityHash` of the immediately preceding record in the same stream. Absent on the first record of a stream (genesis).                                                                                             |
 | `audit.sequence.previous_record_id` | `string` | MAY      | `audit.record.id` of the immediately preceding record in the same stream. Absent on the first record of a stream (genesis). Provides a resolvable locator for the chain pointer independently of hash comparison.         |
 | `audit.sequence.end`                | `bool`   | MAY      | `true` on the last record of a gracefully closed stream. Absence means the stream end is unknown (e.g. crash). MUST NOT appear on any record that is not the final record of the stream.                                  |
 | `audit.sequence.stream_id`          | `string` | MAY      | Opaque identifier scoping this hash chain. UUID v4 RECOMMENDED.                                                                                                                                                           |
@@ -742,7 +742,12 @@ The SHA-256 hash of the canonical serialization of the `AuditRecord`
 as it was written to persistent storage, computed by the sink. The
 record MUST be serialized to JSON and canonicalized using
 [RFC 8785 – JSON Canonicalization Scheme (JCS)][rfc8785] before
-hashing. Returned to the emitting application so that it can verify
+hashing. All `audit.integrity.*` attributes MUST be excluded from the
+canonical form before hashing, using the same exclusion rule as the
+signing preimage (see [Integrity Value Attribute](#integrity-value-attribute)).
+This ensures that a collector countersignature added after initial
+persistence does not change the hash value that chain pointers reference.
+Returned to the emitting application so that it can verify
 that the record was not altered between emission and persistence.
 
 The emitting application SHOULD compute the same hash locally
