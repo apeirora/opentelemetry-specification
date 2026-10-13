@@ -26,6 +26,11 @@ release.
 - Add systemd-journald example mapping to the logs data model appendix and align syslog mapping.
   ([#4995](https://github.com/open-telemetry/opentelemetry-specification/pull/4995))
 
+### Audit
+
+- Introduce Audit-Logging signal and related specification sections.
+  ([#6](https://github.com/apeirora/opentelemetry-specification/pull/6))
+
 ### Baggage
 
 ### Profiles
