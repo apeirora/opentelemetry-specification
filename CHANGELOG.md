@@ -154,10 +154,6 @@ release.
 - Introduce Audit-Logging signal and related specification sections.
   ([#6](https://github.com/apeirora/opentelemetry-specification/pull/6))
 
-### Baggage
-
-### Profiles
-
 ### Resource
 
 - Update resource detectors to generate entities and indicate resource detectors should be entity-aware
